@@ -1,6 +1,6 @@
 #include "common.h"
 
-void main()
+int main()
 {
-
+	cout << "hello" << endl;
 }
