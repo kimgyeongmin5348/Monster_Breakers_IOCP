@@ -13,15 +13,24 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="WorkerThread">
+      <UniqueIdentifier>{dc2d2585-7847-4478-86f4-810fb10167c0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="server_main.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="workerthread.cpp">
+      <Filter>WorkerThread</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h">
       <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="workerthread.h">
+      <Filter>WorkerThread</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

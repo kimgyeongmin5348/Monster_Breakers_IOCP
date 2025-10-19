@@ -128,9 +128,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="server_main.cpp" />
+    <ClCompile Include="workerthread.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h" />
+    <ClInclude Include="workerthread.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
