@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h"
+#include "protocol.h"
 
 class SESSION;
 
@@ -16,7 +17,11 @@ enum IO_OP { IO_RECV, IO_SEND, IO_ACCEPT };
 class EXP_OVER
 {
 public:
-	EXP_OVER(IO_OP op);
+	EXP_OVER(IO_OP op) : _io_op(op) {
+		ZeroMemory(&_over, sizeof(_over));
+		_wsabuf[0].buf = reinterpret_cast<CHAR*>(_buffer);
+		_wsabuf[0].len = sizeof(_buffer);
+	}
 
 
 	WSAOVERLAPPED		_over;
@@ -48,8 +53,20 @@ public:
 public:
 	SESSION() = delete;
 
-
 	SESSION(long long session_id, SOCKET s);
 
+	~SESSION() {
+		closesocket(_c_socket);
+	}
+
+	void do_recv();
+	void do_send(void* buff);
+	void send_player_info_packet();
+	void process_packet(unsigned char* p);
 
 };
+
+void BroadcastToAll(void* pkt, long long exclude_id);
+void print_error_message(int s_err);
+void do_accept(SOCKET s_socket);
+void WorkerThread();
