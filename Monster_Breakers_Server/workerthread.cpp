@@ -86,6 +86,7 @@ void SESSION::process_packet(unsigned char* p)
 	{
 		cs_packet_login* packet = reinterpret_cast<cs_packet_login*>(p);
 		_name = packet->name;
+		
 		std::cout << "[서버] " << _id << "번 클라이언트 로그인: " << _name << std::endl;
 
 		send_player_info_packet();
