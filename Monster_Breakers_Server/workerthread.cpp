@@ -20,7 +20,7 @@ SESSION::SESSION(long long session_id, SOCKET s) : _id(session_id), _c_socket(s)
 	setsockopt(_c_socket, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt));
 
 	{
-		std::lock_guard<std::mutex> lock(g_session_mutex);
+		std::lock_guard<std::mutex> lock(g_user_mutex);
 		g_user[_id] = this;
 		std::cout << "[서버] 세션 추가 완료: ID=" << _id << ", 현재 접속자 수: " << g_user.size() << "\n";
 	}
@@ -176,7 +176,7 @@ void BroadcastToAll(void* pkt, long long exclude_id = -1)
 	unsigned char packet_size = reinterpret_cast<unsigned char*>(pkt)[0];
 	std::vector<SESSION*> sessions;
 	{
-		std::lock_guard<std::mutex> lock(g_session_mutex);
+		std::lock_guard<std::mutex> lock(g_user_mutex);
 		for (auto& [id, session] : g_user) {
 			if (session->_c_socket != INVALID_SOCKET && id != exclude_id)
 				sessions.push_back(session);
@@ -295,7 +295,7 @@ void WorkerThread() {
 			// 1. 뮤텍스 락으로 세션 검색 (스레드 세이프)
 			SESSION* pUser = nullptr;
 			{
-				std::lock_guard<std::mutex> lock(g_session_mutex);
+				std::lock_guard<std::mutex> lock(g_user_mutex);
 				auto it = g_user.find(key);
 				if (it == g_user.end()) {
 					// 세션이 이미 제거된 경우
