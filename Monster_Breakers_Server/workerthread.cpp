@@ -5,7 +5,7 @@ class SESSION;
 
 HANDLE g_hIOCP;
 std::unordered_map<long long, SESSION*> g_user;
-std::mutex g_session_mutex;
+std::mutex g_user_mutex;
 SOCKET g_listen_socket = INVALID_SOCKET;
 std::atomic<long long> g_session_id_counter = 0;
 
@@ -73,7 +73,7 @@ void SESSION::send_player_info_packet()
 	p.position = _position;
 	p.look = _look;
 	p.right = _right;
-	p.animState = _animState;
+	//p.animState = _animState;
 	p.hp = _hp;
 	do_send(&p);
 }
@@ -88,7 +88,48 @@ void SESSION::process_packet(unsigned char* p)
 		_name = packet->name;
 		std::cout << "[서버] " << _id << "번 클라이언트 로그인: " << _name << std::endl;
 
+		// 1. 자신의 정보 전송
 		send_player_info_packet();
+
+		// 2. 기존 유저 정보 전송
+		std::vector<sc_packet_enter> existing_users;
+		{
+			std::lock_guard<std::mutex> lock(g_user_mutex);
+			for (auto& [ex_id, ex_session] : g_user) {
+				if (ex_id == _id) continue;
+
+				sc_packet_enter pkt;
+				pkt.size = sizeof(pkt);
+				pkt.type = SC_P_ENTER;
+				pkt.id = ex_id;
+				pkt.position = ex_session->_position;
+				pkt.look = ex_session->_look;
+				pkt.right = ex_session->_right;
+				//pkt.animState = ex_session->GetAnimationState();
+				pkt.hp = ex_session->_hp;
+				existing_users.push_back(pkt);
+			}
+		}
+		for (auto& pkt : existing_users) {
+			do_send(&pkt);
+		}
+
+
+		// 3. 신규 유저 정보 브로드캐스트
+		sc_packet_enter new_user_pkt;
+		new_user_pkt.size = sizeof(new_user_pkt);
+		new_user_pkt.type = SC_P_ENTER;
+		new_user_pkt.id = _id;
+		new_user_pkt.position = _position;
+		new_user_pkt.look = _look;
+		new_user_pkt.right = _right;
+		//new_user_pkt.animState = _animState;
+		new_user_pkt.hp = _hp;	
+		BroadcastToAll(&new_user_pkt, _id);
+
+
+
+		break;
 	}
 
 	case CS_P_MOVE:
@@ -97,9 +138,30 @@ void SESSION::process_packet(unsigned char* p)
 		_position = packet->position;
 		_look = packet->look;
 		_right = packet->right;
+		//_animState = packet->animState;  애니메이션 완료되면 하기
+
+		sc_packet_move mp;
+		mp.size = sizeof(mp);
+		mp.type = SC_P_MOVE;
+		mp.id = _id;
+		mp.position = _position;
+		mp.look = _look;
+		mp.right = _right;
+		//mp.animState = _animState;
+
+		BroadcastToAll(&mp, _id);
+
 	}
 		
+	case CS_P_LOADING_DONE:
+	{
+		cs_packet_loading_done* packet = reinterpret_cast<cs_packet_loading_done*>(p);
 
+		std::cout << "[서버] " << _id << "번 클라이언트가 로딩 완료를 알림\n";
+
+		//몬스터 정보 전송 부분 (초기 스폰위치와 상태)
+
+	}
 	default:
 		std::cout << "[경고] 잘못된 패킷 타입: " << (int)packet_type << "\n";
 		return;

@@ -24,7 +24,21 @@ constexpr char SC_P_LEAVE = 4;
 constexpr char CS_P_LOGIN = 5;
 constexpr char CS_P_MOVE = 6;
 
+constexpr char CS_P_LOADING_DONE = 30;
 
+// =================== 주의!! ========================
+// 
+// 1. 애니메이션 동기화는 클라에서 애니메이션 완료하면 하기
+//		(그전엔 주석처리해둠 : 메모리 크기차이로인한 오류 발생 위험)
+// 
+// ===================================================
+
+
+struct cs_packet_loading_done
+{
+	unsigned char	size;
+	char			type;
+};
 
 struct sc_packet_user_info {
 	unsigned char	size;
@@ -33,7 +47,7 @@ struct sc_packet_user_info {
 	XMFLOAT3		position;
 	XMFLOAT3		look;
 	XMFLOAT3		right;
-	uint8_t			animState;
+	//uint8_t			animState;
 	short			hp;
 };
 
@@ -45,7 +59,7 @@ struct sc_packet_move {
 	XMFLOAT3			position;
 	XMFLOAT3			look;
 	XMFLOAT3			right;
-	uint8_t				animState;
+	//uint8_t				animState;
 };
 
 
@@ -56,7 +70,7 @@ struct sc_packet_enter {
 	XMFLOAT3			position;
 	XMFLOAT3			look;
 	XMFLOAT3			right;
-	uint8_t				animState;
+	//uint8_t				animState;
 	short				hp;
 };
 
@@ -87,5 +101,5 @@ struct cs_packet_move {
 	XMFLOAT3			position;
 	XMFLOAT3			look;
 	XMFLOAT3			right;
-	uint8_t				animState;
+	//uint8_t				animState;
 };
