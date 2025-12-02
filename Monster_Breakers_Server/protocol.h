@@ -2,6 +2,14 @@
 
 #include "common.h"
 
+//------------------- Check List --------------------- 
+// 
+// <Player>  -> nickname 넣어서 작업해보자.
+// 1. 캐릭터 위치, 캐릭터 벡터, 애니메이션 상태, Hp, 캐릭터 Id, 
+//	 (공격력도 캐릭터의 정보에 들어가야 할까?)
+// 
+//----------------------------------------------------
+
 //#define SET_DATA_FROM_DATABASE
 #define SERVER_STRESS_TEST
 
@@ -10,6 +18,7 @@
 #define NUM_WORKER_THREADS 4
 #define MAX_USER 5000
 
+#define BUF_SIZE 1024
 #define MAX_BUFFER 8192
 
 constexpr char MAX_ID_LENGTH = 20;
