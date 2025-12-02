@@ -5,7 +5,7 @@
 //------------------- Check List --------------------- 
 // 
 // <Player>  -> nickname 넣어서 작업해보자.
-// 1. 캐릭터 위치, 캐릭터 벡터, 애니메이션 상태, Hp, 캐릭터 Id, 
+// 1. 캐릭터 위치, 캐릭터 벡터, 애니메이션 상태, Hp, 캐릭터 Id, 캐릭터 직업
 //	 (공격력도 캐릭터의 정보에 들어가야 할까?)
 // 
 //----------------------------------------------------
@@ -40,6 +40,8 @@ constexpr char CS_P_LOADING_DONE = 30;
 // 1. 애니메이션 동기화는 클라에서 애니메이션 완료하면 하기
 //		(그전엔 주석처리해둠 : 메모리 크기차이로인한 오류 발생 위험)
 // 
+// 2. 플레이어 직업 부분도 클라이언트에서 완성됬다는거 알려주면 완료하기
+// 
 // ===================================================
 
 
@@ -58,6 +60,7 @@ struct sc_packet_user_info {
 	XMFLOAT3		right;
 	//uint8_t			animState;
 	short			hp;
+	//uint8_t			job;
 };
 
 
@@ -81,6 +84,7 @@ struct sc_packet_enter {
 	XMFLOAT3			right;
 	//uint8_t				animState;
 	short				hp;
+	//uint8_t			job;
 };
 
 struct sc_packet_leave {

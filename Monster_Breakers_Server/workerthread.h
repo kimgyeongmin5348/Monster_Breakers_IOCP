@@ -49,6 +49,7 @@ public:
 	uint8_t				_animState;
 	short				_hp = 100;
 	string				_name;
+	uint8_t				_job;
 	atomic<bool>		_is_sending{ false };
 
 public:
