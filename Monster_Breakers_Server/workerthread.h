@@ -38,6 +38,7 @@ class SESSION {
 public:
 	SOCKET				_c_socket;
 	long long			_id;
+	long long			_nickname;
 
 	EXP_OVER			_recv_over{ IO_RECV };
 	unsigned char		_remained;
@@ -48,6 +49,7 @@ public:
 	uint8_t				_animState;
 	short				_hp = 100;
 	string				_name;
+	uint8_t				_job;
 	atomic<bool>		_is_sending{ false };
 
 public:
