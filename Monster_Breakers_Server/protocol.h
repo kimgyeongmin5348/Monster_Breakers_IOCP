@@ -24,7 +24,7 @@ constexpr char SC_P_LEAVE = 4;
 constexpr char CS_P_LOGIN = 5;
 constexpr char CS_P_MOVE = 6;
 
-constexpr char CS_P_LOADING_DONE = 30;
+constexpr char CS_P_LOADING_DONE = 25;
 
 // =================== 주의!! ========================
 // 
@@ -40,15 +40,34 @@ struct cs_packet_loading_done
 	char			type;
 };
 
+enum class AnimationState : uint8_t {
+	IDLE,         // 0
+	WALK,         // 1
+	RUN,          // 2 
+	JUMP,         // 3
+	SWING,        // 4
+	CROUCH,       // 5
+	CROUCH_WALK   // 6
+};
+
+struct AnimationBlend
+{
+	int from = -1;
+	int to = -1;
+	float duration = 0.5f; // 블렌딩 시간
+	float elapsed = 0.0f;
+	bool active = false;
+};
+
 struct sc_packet_user_info {
-	unsigned char	size;
-	char			type;
-	long long		id;
-	XMFLOAT3		position;
-	XMFLOAT3		look;
-	XMFLOAT3		right;
-	//uint8_t			animState;
-	short			hp;
+	unsigned char		size;
+	char				type;
+	long long			id;
+	XMFLOAT3			position;
+	XMFLOAT3			look;
+	XMFLOAT3			right;
+	uint8_t				animState;
+	short				hp;
 };
 
 
@@ -59,7 +78,7 @@ struct sc_packet_move {
 	XMFLOAT3			position;
 	XMFLOAT3			look;
 	XMFLOAT3			right;
-	//uint8_t				animState;
+	uint8_t				animState;
 };
 
 
@@ -70,7 +89,7 @@ struct sc_packet_enter {
 	XMFLOAT3			position;
 	XMFLOAT3			look;
 	XMFLOAT3			right;
-	//uint8_t				animState;
+	uint8_t				animState;
 	short				hp;
 };
 
@@ -101,5 +120,5 @@ struct cs_packet_move {
 	XMFLOAT3			position;
 	XMFLOAT3			look;
 	XMFLOAT3			right;
-	//uint8_t				animState;
+	uint8_t				animState;
 };
