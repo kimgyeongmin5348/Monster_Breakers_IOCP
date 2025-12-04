@@ -66,6 +66,9 @@ public:
 	void send_player_info_packet();
 	void process_packet(unsigned char* p);
 
+	void SetAnimationState(uint8_t state) { _animState = state; }
+	uint8_t GetAnimationState() const { return _animState; }
+
 };
 
 void BroadcastToAll(void* pkt, long long exclude_id);

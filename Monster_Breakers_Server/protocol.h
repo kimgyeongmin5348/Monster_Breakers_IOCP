@@ -4,9 +4,9 @@
 
 //------------------- Check List --------------------- 
 // 
-// <Player>  -> nickname ³Ö¾î¼­ ÀÛ¾÷ÇØº¸ÀÚ.
-// 1. Ä³¸¯ÅÍ À§Ä¡, Ä³¸¯ÅÍ º¤ÅÍ, ¾Ö´Ï¸ŞÀÌ¼Ç »óÅÂ, Hp, Ä³¸¯ÅÍ Id, Ä³¸¯ÅÍ Á÷¾÷
-//	 (°ø°İ·Âµµ Ä³¸¯ÅÍÀÇ Á¤º¸¿¡ µé¾î°¡¾ß ÇÒ±î?)
+// <Player>  -> nickname ë„£ì–´ì„œ ì‘ì—…í•´ë³´ì.
+// 1. ìºë¦­í„° ìœ„ì¹˜, ìºë¦­í„° ë²¡í„°, ì• ë‹ˆë©”ì´ì…˜ ìƒíƒœ, Hp, ìºë¦­í„° Id, ìºë¦­í„° ì§ì—…
+//	 (ê³µê²©ë ¥ë„ ìºë¦­í„°ì˜ ì •ë³´ì— ë“¤ì–´ê°€ì•¼ í• ê¹Œ?)
 // 
 //----------------------------------------------------
 
@@ -23,96 +23,115 @@
 
 constexpr char MAX_ID_LENGTH = 20;
 
-// sc °ü·Ã
+// sc ê´€ë ¨
 constexpr char SC_P_USER_INFO = 1;
 constexpr char SC_P_MOVE = 2;
 constexpr char SC_P_ENTER = 3;
 constexpr char SC_P_LEAVE = 4;
 
-// cs °ü·Ã
+// cs ê´€ë ¨
 constexpr char CS_P_LOGIN = 5;
 constexpr char CS_P_MOVE = 6;
 
-constexpr char CS_P_LOADING_DONE = 30;
+constexpr char CS_P_LOADING_DONE = 25;
 
-// =================== ÁÖÀÇ!! ========================
+// =================== ì£¼ì˜!! ========================
 // 
-// 1. ¾Ö´Ï¸ŞÀÌ¼Ç µ¿±âÈ­´Â Å¬¶ó¿¡¼­ ¾Ö´Ï¸ŞÀÌ¼Ç ¿Ï·áÇÏ¸é ÇÏ±â
-//		(±×Àü¿£ ÁÖ¼®Ã³¸®ÇØµÒ : ¸Ş¸ğ¸® Å©±âÂ÷ÀÌ·ÎÀÎÇÑ ¿À·ù ¹ß»ı À§Çè)
+// 1. ì• ë‹ˆë©”ì´ì…˜ ë™ê¸°í™”ëŠ” í´ë¼ì—ì„œ ì• ë‹ˆë©”ì´ì…˜ ì™„ë£Œí•˜ë©´ í•˜ê¸°
+//		(ê·¸ì „ì—” ì£¼ì„ì²˜ë¦¬í•´ë‘  : ë©”ëª¨ë¦¬ í¬ê¸°ì°¨ì´ë¡œì¸í•œ ì˜¤ë¥˜ ë°œìƒ ìœ„í—˜)
 // 
-// 2. ÇÃ·¹ÀÌ¾î Á÷¾÷ ºÎºĞµµ Å¬¶óÀÌ¾ğÆ®¿¡¼­ ¿Ï¼º‰ç´Ù´Â°Å ¾Ë·ÁÁÖ¸é ¿Ï·áÇÏ±â
+// 2. í”Œë ˆì´ì–´ ì§ì—… ë¶€ë¶„ë„ í´ë¼ì´ì–¸íŠ¸ì—ì„œ ì™„ì„±ë˜ì—ˆë‹¤ê³  ì•Œë ¤ì£¼ë©´ ì™„ë£Œí•˜ê¸°
 // 
 // ===================================================
 
 
 struct cs_packet_loading_done
 {
-	unsigned char	size;
-	char			type;
+	unsigned char	  size;
+	char			      type;
+};
+
+enum class AnimationState : uint8_t {
+	IDLE,         // 0
+	WALK,         // 1
+	RUN,          // 2 
+	JUMP,         // 3
+	SWING,        // 4
+	CROUCH,       // 5
+	CROUCH_WALK   // 6
+};
+
+struct AnimationBlend
+{
+	int from = -1;
+	int to = -1;
+	float duration = 0.5f; // ë¸”ë Œë”© ì‹œê°„
+	float elapsed = 0.0f;
+	bool active = false;
 };
 
 struct sc_packet_user_info {
-	unsigned char	size;
-	char			type;
-	long long		id;
-	XMFLOAT3		position;
-	XMFLOAT3		look;
-	XMFLOAT3		right;
-	//uint8_t			animState;
-	short			hp;
-	//uint8_t			job;
+
+	unsigned char		size;
+	char			    	type;
+	long long		  	id;
+	XMFLOAT3		  	position;
+	XMFLOAT3		  	look;
+	XMFLOAT3		  	right;
+	uint8_t			  	animState;
+	short			    	hp;
 };
 
 
 struct sc_packet_move {
 	unsigned char		size;
-	char				type;
-	long long			id;
-	XMFLOAT3			position;
-	XMFLOAT3			look;
-	XMFLOAT3			right;
-	//uint8_t				animState;
+	char		    		type;
+	long long			  id;
+	XMFLOAT3			  position;
+	XMFLOAT3			  look;
+	XMFLOAT3			  right;
+	uint8_t				  animState;
 };
 
 
 struct sc_packet_enter {
 	unsigned char		size;
-	char				type;
-	long long			id;
-	XMFLOAT3			position;
-	XMFLOAT3			look;
-	XMFLOAT3			right;
-	//uint8_t				animState;
-	short				hp;
-	//uint8_t			job;
+	char			    	type;
+	long long	  		id;
+	XMFLOAT3		  	position;
+	XMFLOAT3		  	look;
+	XMFLOAT3			  right;
+	uint8_t				  animState;
+	short				    hp;
+	//uint8_t			  job;
 };
 
 struct sc_packet_leave {
 	unsigned char		size;
-	char				type;
-	long long			id;
+	char				    type;
+	long long			  id;
 };
 
 
 struct cs_packet_login {
 	unsigned char		size;
-	char				type;
+	char				    type;
 	//XMFLOAT3			position;
-	char				name[MAX_ID_LENGTH];
+	char				    name[MAX_ID_LENGTH];
 
 };
 
 
 struct sc_packet_login_fail {
 	unsigned char		size;
-	char				type;
+	char				    type;
 };
 
 struct cs_packet_move {
 	unsigned char		size;
-	char				type;
-	XMFLOAT3			position;
-	XMFLOAT3			look;
-	XMFLOAT3			right;
-	//uint8_t				animState;
+	char				    type;
+	XMFLOAT3			  position;
+	XMFLOAT3		  	look;
+	XMFLOAT3		  	right;
+	uint8_t			  	animState;
 };

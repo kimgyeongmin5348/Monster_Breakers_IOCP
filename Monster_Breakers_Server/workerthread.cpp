@@ -7,7 +7,8 @@ HANDLE g_hIOCP;
 std::unordered_map<long long, SESSION*> g_user;
 std::mutex g_user_mutex;
 SOCKET g_listen_socket = INVALID_SOCKET;
-std::atomic<long long> g_session_id_counter = 0;
+//std::atomic<long long> g_session_id_counter = 0;
+int g_session_id_counter = 0;
 
 // SESSION 구현
 SESSION::SESSION(long long session_id, SOCKET s) : _id(session_id), _c_socket(s), _recv_over(IO_RECV)
@@ -107,7 +108,7 @@ void SESSION::process_packet(unsigned char* p)
 				pkt.position = ex_session->_position;
 				pkt.look = ex_session->_look;
 				pkt.right = ex_session->_right;
-				//pkt.animState = ex_session->GetAnimationState();
+				pkt.animState = ex_session->GetAnimationState();
 				pkt.hp = ex_session->_hp;
 				//pkt.job = ex_session->_job;
 				existing_users.push_back(pkt);
@@ -126,7 +127,7 @@ void SESSION::process_packet(unsigned char* p)
 		new_user_pkt.position = _position;
 		new_user_pkt.look = _look;
 		new_user_pkt.right = _right;
-		//new_user_pkt.animState = _animState;
+		new_user_pkt.animState = _animState;
 		new_user_pkt.hp = _hp;	
 		//new_user_pkt.job = _job;
 		BroadcastToAll(&new_user_pkt, _id);
@@ -142,7 +143,7 @@ void SESSION::process_packet(unsigned char* p)
 		_position = packet->position;
 		_look = packet->look;
 		_right = packet->right;
-		//_animState = packet->animState;  애니메이션 완료되면 하기
+		_animState = packet->animState;  //애니메이션 완료되면 하기
 
 		sc_packet_move mp;
 		mp.size = sizeof(mp);
@@ -151,10 +152,11 @@ void SESSION::process_packet(unsigned char* p)
 		mp.position = _position;
 		mp.look = _look;
 		mp.right = _right;
-		//mp.animState = _animState;
+		mp.animState = _animState;
 
 		BroadcastToAll(&mp, _id);
 
+		break;
 	}
 		
 	case CS_P_LOADING_DONE:
@@ -165,6 +167,7 @@ void SESSION::process_packet(unsigned char* p)
 
 		//몬스터 정보 전송 부분 (초기 스폰위치와 상태)
 
+		break;
 	}
 	default:
 		std::cout << "[경고] 잘못된 패킷 타입: " << (int)packet_type << "\n";
