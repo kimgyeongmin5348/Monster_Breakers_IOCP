@@ -8,7 +8,7 @@ std::unordered_map<long long, SESSION*> g_user;
 std::mutex g_user_mutex;
 SOCKET g_listen_socket = INVALID_SOCKET;
 //std::atomic<long long> g_session_id_counter = 0;
-int g_session_id_counter = 0;
+long long g_session_id_counter = 0;
 
 // SESSION 구현
 SESSION::SESSION(long long session_id, SOCKET s) : _id(session_id), _c_socket(s), _recv_over(IO_RECV)
@@ -46,24 +46,23 @@ void SESSION::do_recv() {
 	/*std::cout << "[서버] " << _id << "번 소켓 수신 대기 시작\n";*/
 }
 
-void SESSION::do_send(void* buff)
-{
+void SESSION::do_send(void* buff) {
 	if (_c_socket == INVALID_SOCKET) return;
+	EXP_OVER* over = new EXP_OVER(IO_SEND);
+	unsigned char packet_size = reinterpret_cast<unsigned char*>(buff)[0];
+	memcpy(over->_buffer, buff, packet_size);
+	over->_wsabuf[0].len = packet_size;
 
-	EXP_OVER* o = new EXP_OVER(IO_SEND);
-	const unsigned char packet_size = reinterpret_cast<unsigned char*>(buff)[0];
-	memcpy_s(o->_buffer, sizeof(o->_buffer), buff, packet_size);
-	o->_wsabuf[0].len = packet_size;
-
-	int ret = WSASend(_c_socket, o->_wsabuf, 1, NULL, 0, &o->_over, NULL);
-	if (SOCKET_ERROR == ret) {
+	int ret = WSASend(_c_socket, over->_wsabuf, 1, NULL, 0, &over->_over, NULL);
+	if (ret == SOCKET_ERROR) {
 		int error = WSAGetLastError();
 		if (error != WSA_IO_PENDING) {
-			std::cout << "[오류] 전송 실패: " << error << std::endl;
-			delete o;
+			std::cout << "[오류] do_send 실패 ID:" << _id << " 에러:" << error << std::endl;
+			delete over;
 		}
 	}
 }
+
 
 void SESSION::send_player_info_packet()
 {
@@ -135,6 +134,11 @@ void SESSION::process_packet(unsigned char* p)
 		new_user_pkt.animState = _animState;
 		new_user_pkt.hp = _hp;
 		new_user_pkt.job = _job;
+
+		std::cout << "Sending ENTER pkt ID: " << new_user_pkt.id << " size: "
+			<< static_cast<int>(new_user_pkt.size) << std::endl;
+
+
 		BroadcastToAll(&new_user_pkt, _id);
 
 
@@ -183,24 +187,22 @@ void SESSION::process_packet(unsigned char* p)
 
 
 
-void BroadcastToAll(void* pkt, long long exclude_id = -1)
-{
+void BroadcastToAll(void* pkt, long long exclude_id = -1) {
 	unsigned char packet_size = reinterpret_cast<unsigned char*>(pkt)[0];
 	std::vector<SESSION*> sessions;
 	{
 		std::lock_guard<std::mutex> lock(g_user_mutex);
-		for (auto& [id, session] : g_user) {
-			if (session->_c_socket != INVALID_SOCKET && id != exclude_id)
-				sessions.push_back(session);
+		for (auto& pair : g_user) {
+			if (pair.second->_c_socket != INVALID_SOCKET && pair.first != exclude_id) {
+				sessions.push_back(pair.second);
+			}
 		}
 	}
-
-	for (auto session : sessions) {
-		auto packet_copy = new char[packet_size]; // 동적 크기 할당
-		memcpy(packet_copy, pkt, packet_size);
-		session->do_send(packet_copy);
+	for (auto* session : sessions) {
+		session->do_send(pkt);  // do_send 호출로 통일
 	}
 }
+
 
 void print_error_message(int s_err)
 {
