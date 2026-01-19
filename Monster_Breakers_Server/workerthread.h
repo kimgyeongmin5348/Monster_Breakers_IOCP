@@ -74,4 +74,5 @@ public:
 void BroadcastToAll(void* pkt, long long exclude_id);
 void print_error_message(int s_err);
 void do_accept(SOCKET s_socket);
+void CloseSession(long long id);
 void WorkerThread();

@@ -16,6 +16,15 @@
     <Filter Include="WorkerThread">
       <UniqueIdentifier>{dc2d2585-7847-4478-86f4-810fb10167c0}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Contents">
+      <UniqueIdentifier>{4a0c931a-2aa2-4c17-93ee-eec622febd12}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Contents\Monster">
+      <UniqueIdentifier>{0b73508d-2dcb-4a33-9367-1473c52e6e5c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Contents\BossMonster">
+      <UniqueIdentifier>{f5406851-c952-47dc-9291-63637c247e2c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="server_main.cpp">

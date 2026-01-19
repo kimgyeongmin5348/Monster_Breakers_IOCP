@@ -40,7 +40,6 @@ constexpr char CS_P_LOADING_DONE = 25;
 // 1. 애니메이션 동기화는 클라에서 애니메이션 완료하면 하기
 //		(그전엔 주석처리해둠 : 메모리 크기차이로인한 오류 발생 위험)
 // 
-// 2. 플레이어 직업 부분도 클라이언트에서 완성되었다고 알려주면 완료하기
 // 
 // ===================================================
 
@@ -48,7 +47,7 @@ constexpr char CS_P_LOADING_DONE = 25;
 struct cs_packet_loading_done
 {
 	unsigned char	  size;
-	char			      type;
+	char			  type;
 };
 
 enum class AnimationState : uint8_t {
@@ -70,67 +69,76 @@ struct AnimationBlend
 	bool active = false;
 };
 
+enum PLAYER_JOB {
+	JOB_WARRIOR = 0,
+	JOB_THIEF = 1,
+	JOB_MAGE = 2,
+	JOB_MAX
+};
+
 struct sc_packet_user_info {
 
 	unsigned char		size;
-	char			    	type;
+	char			    type;
 	long long		  	id;
 	XMFLOAT3		  	position;
 	XMFLOAT3		  	look;
 	XMFLOAT3		  	right;
 	uint8_t			  	animState;
-	short			    	hp;
+	short			    hp;
+	uint8_t				job;
 };
 
 
 struct sc_packet_move {
 	unsigned char		size;
-	char		    		type;
-	long long			  id;
-	XMFLOAT3			  position;
-	XMFLOAT3			  look;
-	XMFLOAT3			  right;
-	uint8_t				  animState;
+	char		    	type;
+	long long			id;
+	XMFLOAT3			position;
+	XMFLOAT3			look;
+	XMFLOAT3			right;
+	uint8_t				animState;
 };
 
 
 struct sc_packet_enter {
 	unsigned char		size;
-	char			    	type;
+	char			    type;
 	long long	  		id;
 	XMFLOAT3		  	position;
 	XMFLOAT3		  	look;
-	XMFLOAT3			  right;
-	uint8_t				  animState;
-	short				    hp;
-	//uint8_t			  job;
+	XMFLOAT3			right;
+	uint8_t				animState;
+	short				hp;
+	uint8_t			    job;
 };
 
 struct sc_packet_leave {
 	unsigned char		size;
-	char				    type;
-	long long			  id;
+	char				type;
+	long long			id;
 };
 
 
 struct cs_packet_login {
 	unsigned char		size;
-	char				    type;
+	char				type;
 	//XMFLOAT3			position;
-	char				    name[MAX_ID_LENGTH];
+	char				name[MAX_ID_LENGTH];
+	uint8_t				job;
 
 };
 
 
 struct sc_packet_login_fail {
 	unsigned char		size;
-	char				    type;
+	char				type;
 };
 
 struct cs_packet_move {
 	unsigned char		size;
-	char				    type;
-	XMFLOAT3			  position;
+	char				type;
+	XMFLOAT3			position;
 	XMFLOAT3		  	look;
 	XMFLOAT3		  	right;
 	uint8_t			  	animState;

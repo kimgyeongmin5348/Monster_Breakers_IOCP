@@ -74,9 +74,9 @@ void SESSION::send_player_info_packet()
 	p.position = _position;
 	p.look = _look;
 	p.right = _right;
-	//p.animState = _animState;
+	p.animState = _animState;
 	p.hp = _hp;
-	//p.job = _job;
+	p.job = _job;
 	do_send(&p);
 }
 
@@ -88,8 +88,13 @@ void SESSION::process_packet(unsigned char* p)
 	{
 		cs_packet_login* packet = reinterpret_cast<cs_packet_login*>(p);
 		_name = packet->name;
-		
-		std::cout << "[서버] " << _id << "번 클라이언트 로그인: " << _name << std::endl;
+		_job = packet->job;
+
+		if (_job >= JOB_MAX) {
+			cout << "[오류] 잘못된 작업 선택" << endl;
+		}
+
+		std::cout << "[서버] " << _id << "번 클라이언트 로그인: " << _name << "(직업 :" << (int)_job << ")" << std::endl;
 
 		// 1. 자신의 정보 전송
 		send_player_info_packet();
@@ -110,7 +115,7 @@ void SESSION::process_packet(unsigned char* p)
 				pkt.right = ex_session->_right;
 				pkt.animState = ex_session->GetAnimationState();
 				pkt.hp = ex_session->_hp;
-				//pkt.job = ex_session->_job;
+				pkt.job = ex_session->_job;
 				existing_users.push_back(pkt);
 			}
 		}
@@ -128,8 +133,8 @@ void SESSION::process_packet(unsigned char* p)
 		new_user_pkt.look = _look;
 		new_user_pkt.right = _right;
 		new_user_pkt.animState = _animState;
-		new_user_pkt.hp = _hp;	
-		//new_user_pkt.job = _job;
+		new_user_pkt.hp = _hp;
+		new_user_pkt.job = _job;
 		BroadcastToAll(&new_user_pkt, _id);
 
 
@@ -158,7 +163,7 @@ void SESSION::process_packet(unsigned char* p)
 
 		break;
 	}
-		
+
 	case CS_P_LOADING_DONE:
 	{
 		cs_packet_loading_done* packet = reinterpret_cast<cs_packet_loading_done*>(p);
@@ -175,7 +180,7 @@ void SESSION::process_packet(unsigned char* p)
 	}
 
 }
-	
+
 
 
 void BroadcastToAll(void* pkt, long long exclude_id = -1)
