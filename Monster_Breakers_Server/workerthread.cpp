@@ -10,6 +10,15 @@ SOCKET g_listen_socket = INVALID_SOCKET;
 //std::atomic<long long> g_session_id_counter = 0;
 long long g_session_id_counter = 0;
 
+const char* GetJobName(uint8_t job) {
+	switch (static_cast<PLAYER_JOB>(job)) {
+	case PLAYER_JOB::JOB_WARRIOR: return "기사";
+	case PLAYER_JOB::JOB_THIEF: return "도적";
+	case PLAYER_JOB::JOB_MAGE: return "마법사";
+	default: return "알수없음";
+	}
+}
+
 // SESSION 구현
 SESSION::SESSION(long long session_id, SOCKET s) : _id(session_id), _c_socket(s), _recv_over(IO_RECV)
 {
@@ -93,7 +102,7 @@ void SESSION::process_packet(unsigned char* p)
 			cout << "[오류] 잘못된 작업 선택" << endl;
 		}
 
-		std::cout << "[서버] " << _id << "번 클라이언트 로그인: " << _name << "(직업 :" << (int)_job << ")" << std::endl;
+		cout << "[서버] " << _id << "번 클라이언트 로그인: " << _name << "(직업 :" << GetJobName(_job) << ")" << endl;
 
 		// 1. 자신의 정보 전송
 		send_player_info_packet();
