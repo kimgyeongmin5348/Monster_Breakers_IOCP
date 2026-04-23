@@ -187,6 +187,26 @@ void SESSION::process_packet(unsigned char* p)
 
 		break;
 	}
+
+	case CS_P_SKILL:
+	{
+		cs_packet_skill* packet = reinterpret_cast<cs_packet_skill*>(p);
+
+		std::cout << "[SERVER][SKILL] CS_P_SKILL 수신 | from ID=" << _id
+			<< " skillType=" << (int)packet->skillType
+			<< " pos=(" << packet->position.x << ", " << packet->position.y << ", " << packet->position.z << ")\n";
+
+		sc_packet_skill broadcast{};
+		broadcast.size = sizeof(broadcast);
+		broadcast.type = SC_P_SKILL;
+		broadcast.playerID = _id;
+		broadcast.skillType = packet->skillType;
+		broadcast.position = packet->position;
+		broadcast.look = packet->look;
+
+		BroadcastToAll(&broadcast, _id); // 본인 제외 전송
+		break;
+	}
 	default:
 		std::cout << "[경고] 잘못된 패킷 타입: " << (int)packet_type << "\n";
 		return;
