@@ -4,8 +4,8 @@
 class SESSION;
 
 HANDLE g_hIOCP;
-std::unordered_map<long long, SESSION*> g_user;
-std::mutex g_user_mutex;
+std::unordered_map<long long, SESSION*> g_session;
+std::mutex g_session_mutex;
 SOCKET g_listen_socket = INVALID_SOCKET;
 //std::atomic<long long> g_session_id_counter = 0;
 long long g_session_id_counter = 0;
@@ -30,9 +30,9 @@ SESSION::SESSION(long long session_id, SOCKET s) : _id(session_id), _c_socket(s)
 	setsockopt(_c_socket, IPPROTO_TCP, TCP_NODELAY, (char*)&opt, sizeof(opt));
 
 	{
-		std::lock_guard<std::mutex> lock(g_user_mutex);
-		g_user[_id] = this;
-		std::cout << "[서버] 세션 추가 완료: ID=" << _id << ", 현재 접속자 수: " << g_user.size() << "\n";
+		std::lock_guard<std::mutex> lock(g_session_mutex);
+		g_session[_id] = this;
+		std::cout << "[서버] 세션 추가 완료: ID=" << _id << ", 현재 접속자 수: " << g_session.size() << "\n";
 	}
 	_remained = 0;
 	do_recv();
@@ -108,10 +108,10 @@ void SESSION::process_packet(unsigned char* p)
 		send_player_info_packet();
 
 		// 2. 기존 유저 정보 전송
-		std::vector<sc_packet_enter> existing_users;
+		std::vector<sc_packet_enter> existing_sessions;
 		{
-			std::lock_guard<std::mutex> lock(g_user_mutex);
-			for (auto& [ex_id, ex_session] : g_user) {
+			std::lock_guard<std::mutex> lock(g_session_mutex);
+			for (auto& [ex_id, ex_session] : g_session) {
 				if (ex_id == _id) continue;
 
 				sc_packet_enter pkt;
@@ -124,10 +124,10 @@ void SESSION::process_packet(unsigned char* p)
 				pkt.animState = ex_session->GetAnimationState();
 				pkt.hp = ex_session->_hp;
 				pkt.job = ex_session->_job;
-				existing_users.push_back(pkt);
+				existing_sessions.push_back(pkt);
 			}
 		}
-		for (auto& pkt : existing_users) {
+		for (auto& pkt : existing_sessions) {
 			do_send(&pkt);
 		}
 
@@ -220,8 +220,8 @@ void BroadcastToAll(void* pkt, long long exclude_id = -1) {
 	unsigned char packet_size = reinterpret_cast<unsigned char*>(pkt)[0];
 	std::vector<SESSION*> sessions;
 	{
-		std::lock_guard<std::mutex> lock(g_user_mutex);
-		for (auto& pair : g_user) {
+		std::lock_guard<std::mutex> lock(g_session_mutex);
+		for (auto& pair : g_session) {
 			if (pair.second->_c_socket != INVALID_SOCKET && pair.first != exclude_id) {
 				sessions.push_back(pair.second);
 			}
@@ -338,9 +338,9 @@ void WorkerThread() {
 			// 1. 뮤텍스 락으로 세션 검색 (스레드 세이프)
 			SESSION* pUser = nullptr;
 			{
-				std::lock_guard<std::mutex> lock(g_user_mutex);
-				auto it = g_user.find(key);
-				if (it == g_user.end()) {
+				std::lock_guard<std::mutex> lock(g_session_mutex);
+				auto it = g_session.find(key);
+				if (it == g_session.end()) {
 					// 세션이 이미 제거된 경우
 					delete eo;  // EXP_OVER 객체 정리
 					continue;

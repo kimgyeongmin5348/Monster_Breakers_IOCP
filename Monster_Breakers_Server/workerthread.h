@@ -7,7 +7,7 @@ class SESSION;
 // 전역 변수 선언
 extern HANDLE g_hIOCP;
 extern std::atomic<long long> g_client_counter;
-extern std::unordered_map<long long, SESSION*> g_user;
+extern std::unordered_map<long long, SESSION*> g_session;
 extern std::mutex g_session_mutex;
 extern SOCKET g_listen_socket;
 

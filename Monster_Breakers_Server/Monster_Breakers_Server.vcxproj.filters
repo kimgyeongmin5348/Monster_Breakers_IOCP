@@ -33,6 +33,9 @@
     <ClCompile Include="workerthread.cpp">
       <Filter>WorkerThread</Filter>
     </ClCompile>
+    <ClCompile Include="Monster.cpp">
+      <Filter>Contents\Monster</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h">
@@ -43,6 +46,9 @@
     </ClInclude>
     <ClInclude Include="protocol.h">
       <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Monster.h">
+      <Filter>Contents\Monster</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

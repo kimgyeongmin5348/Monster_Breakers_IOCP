@@ -1,4 +1,5 @@
 #include "common.h"
+#include "Monster.h"
 #include "workerthread.h"
 
 //------------------- Check List --------------------- 
@@ -43,6 +44,37 @@ int main()
 	do_accept(g_listen_socket);
 
 	std::cout << "서버 시작" << std::endl;
+	// 몬스터 스폰 (서버 시작 시 1회)
+	MonsterManager::GetInstance().SpawnMonsters(MONSTER_SPAWN_COUNT);
+
+	// 몬스터 업데이트 스레드 (별도 스레드로 틱 처리)
+	std::thread monsterThread([]() {
+		using clock = std::chrono::steady_clock;
+		const float TICK_RATE = 1.0f / 20.0f; // 20틱/초
+
+		while (true)
+		{
+			auto start = clock::now();
+
+			// g_session 스냅샷 복사 (뮤텍스 최소화)
+			std::unordered_map<long long, SESSION*> userSnapshot;
+			{
+				std::lock_guard<std::mutex> lock(g_session_mutex);
+				userSnapshot = g_session;
+			}
+
+			MonsterManager::GetInstance().Update(TICK_RATE, userSnapshot);
+
+			// 남은 틱 시간만큼 sleep
+			auto elapsed = std::chrono::duration<float>(clock::now() - start).count();
+			float sleepTime = TICK_RATE - elapsed;
+			if (sleepTime > 0.0f)
+				std::this_thread::sleep_for(
+					std::chrono::milliseconds(static_cast<int>(sleepTime * 1000)));
+		}
+		});
+	monsterThread.detach();
+
 	auto num_threads = (std::min)(8u, std::thread::hardware_concurrency());
 	std::vector<std::thread> workers;
 

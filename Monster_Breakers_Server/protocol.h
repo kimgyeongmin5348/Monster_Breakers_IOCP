@@ -29,8 +29,6 @@ constexpr char MAX_ID_LENGTH = 20;
 constexpr char SC_P_MONSTER_SPAWN = 8;
 constexpr char SC_P_MONSTER_MOVE = 9;
 constexpr char SC_P_MONSTER_DIE = 10;
-
-// 이건 생각좀 더 해보자
 constexpr char SC_P_UPDATE_MONSTER_HP = 27;
 
 
@@ -214,6 +212,13 @@ struct sc_packet_update_monster_hp
 	char				type;
 	long long			monsterID;
 	int					hp;
+};
+
+struct sc_packet_monster_die {
+	unsigned char size;
+	char          type;
+	long long     monsterID;
+	long long     killerID;   // 처치한 플레이어 ID (골드 지급용)
 };
 
 
