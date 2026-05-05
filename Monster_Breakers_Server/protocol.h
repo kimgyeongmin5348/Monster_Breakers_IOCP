@@ -29,6 +29,8 @@ constexpr char MAX_ID_LENGTH = 20;
 constexpr char SC_P_MONSTER_SPAWN = 8;
 constexpr char SC_P_MONSTER_MOVE = 9;
 constexpr char SC_P_MONSTER_DIE = 10;
+constexpr char SC_P_GOLD_REWARD = 11;
+
 constexpr char SC_P_UPDATE_MONSTER_HP = 27;
 
 
@@ -219,6 +221,14 @@ struct sc_packet_monster_die {
 	char          type;
 	long long     monsterID;
 	long long     killerID;   // 처치한 플레이어 ID (골드 지급용)
+};
+
+struct sc_packet_gold_reward {
+	unsigned char size;
+	char          type;
+	long long     playerID;
+	int           amount;
+	int           totalGold;
 };
 
 
