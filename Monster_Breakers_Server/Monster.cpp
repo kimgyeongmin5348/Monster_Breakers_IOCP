@@ -8,7 +8,7 @@
 static const std::vector<XMFLOAT3> SPAWN_POSITIONS = {
     { 100.000f,  0.000f,  -1.000f },
     {  50.000f,  0.000f,  30.000f },
-    { -20.000f,  0.000f, -10.000f },
+    { -6.000f,  0.000f, 1.000f },
 
 };
 
@@ -24,6 +24,18 @@ Monster::Monster(long long id, const XMFLOAT3& spawnPos)
     std::cout << "[몬스터] ID=" << m_id << " 스폰 위치=(" << spawnPos.x << ", " << spawnPos.y << ", " << spawnPos.z << ")\n";
 }
 
+MonsterState Monster::ToClientAnimState() const
+{
+    switch (m_state)
+    {
+    case MonsterAIState::IDLE:    return MonsterState::Idle;
+    case MonsterAIState::CHASE:   return MonsterState::Walk;
+    case MonsterAIState::ATTACK:  return MonsterState::Attack;
+    case MonsterAIState::RETURN:  return MonsterState::Walk;
+    default:                      return MonsterState::Idle;
+    }
+}
+
 void Monster::Update(float dt, const std::unordered_map<long long, SESSION*>& users)
 {
     if (m_isDead) return;
@@ -33,10 +45,10 @@ void Monster::Update(float dt, const std::unordered_map<long long, SESSION*>& us
 
     switch (m_state)
     {
-    case MonsterState::IDLE:    UpdateIdle(dt, users); break;
-    case MonsterState::CHASE:   UpdateChase(dt, users); break;
-    case MonsterState::ATTACK:  UpdateAttack(dt, users); break;
-    case MonsterState::RETURN:  UpdateReturn(dt, users); break;
+    case MonsterAIState::IDLE:    UpdateIdle(dt, users); break;
+    case MonsterAIState::CHASE:   UpdateChase(dt, users); break;
+    case MonsterAIState::ATTACK:  UpdateAttack(dt, users); break;
+    case MonsterAIState::RETURN:  UpdateReturn(dt, users); break;
     }
 }
 
@@ -48,7 +60,7 @@ void Monster::UpdateIdle(float dt, const std::unordered_map<long long, SESSION*>
     if (!closest) return;
 
     m_targetPlayerID = closest->_id;
-    m_state = MonsterState::CHASE;
+    m_state = MonsterAIState::CHASE;
     std::cout << "[몬스터] ID=" << m_id << " IDLE → CHASE (타겟=" << m_targetPlayerID << " 거리=" << dist << ")\n";
 }
 
@@ -57,7 +69,7 @@ void Monster::UpdateChase(float dt, const std::unordered_map<long long, SESSION*
     auto it = users.find(m_targetPlayerID);
     if (it == users.end())
     {
-        m_state = MonsterState::RETURN;
+        m_state = MonsterAIState::RETURN;
         m_targetPlayerID = -1;
         return;
     }
@@ -67,7 +79,7 @@ void Monster::UpdateChase(float dt, const std::unordered_map<long long, SESSION*
 
     if (dist > m_leaveRange)
     {
-        m_state = MonsterState::RETURN;
+        m_state = MonsterAIState::RETURN;
         m_targetPlayerID = -1;
         cout << "[몬스터] ID=" << m_id << " CHASE → RETURN (거리=" << dist << " > " << m_leaveRange << ")\n";
         return;
@@ -75,7 +87,7 @@ void Monster::UpdateChase(float dt, const std::unordered_map<long long, SESSION*
 
     if (dist <= m_attackRange)
     {
-        m_state = MonsterState::ATTACK;
+        m_state = MonsterAIState::ATTACK;
         return;
     }
 
@@ -92,7 +104,7 @@ void Monster::UpdateAttack(float dt, const std::unordered_map<long long, SESSION
     auto it = users.find(m_targetPlayerID);
     if (it == users.end())
     {
-        m_state = MonsterState::RETURN;
+        m_state = MonsterAIState::RETURN;
         m_targetPlayerID = -1;
         return;
     }
@@ -104,13 +116,13 @@ void Monster::UpdateAttack(float dt, const std::unordered_map<long long, SESSION
     {
         if (dist > m_leaveRange)
         {
-            m_state = MonsterState::RETURN;
+            m_state = MonsterAIState::RETURN;
             m_targetPlayerID = -1;
             cout << "[몬스터] ID=" << m_id << " ATTACK → RETURN\n";
         }
         else
         {
-            m_state = MonsterState::CHASE;
+            m_state = MonsterAIState::CHASE;
         }
         return;
     }
@@ -134,7 +146,7 @@ void Monster::UpdateReturn(float dt, const std::unordered_map<long long, SESSION
     if (dist < 0.3f)
     {
         m_position = m_spawnPosition;
-        m_state = MonsterState::IDLE;
+        m_state = MonsterAIState::IDLE;
         std::cout << "[몬스터] ID=" << m_id << " RETURN → IDLE (복귀 완료)\n";
         BroadcastMove(users);
         return;
@@ -213,7 +225,7 @@ void Monster::BroadcastMove(const std::unordered_map<long long, SESSION*>& users
     pkt.monsterID = m_id;
     pkt.position = m_position;
     pkt.rotation = m_look;
-    pkt.state = static_cast<int>(m_state);
+    pkt.state = static_cast<int>(ToClientAnimState());
 
     for (auto& [id, session] : users)
         session->do_send(&pkt);

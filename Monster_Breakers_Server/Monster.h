@@ -4,7 +4,7 @@
 
 static const int   MONSTER_SPAWN_COUNT = 5; // 서버 시작 시 스폰할 몬스터 수
 
-enum class MonsterState {
+enum class MonsterAIState {
     IDLE,
     CHASE,
     ATTACK,
@@ -49,7 +49,7 @@ public:
     // -------------------------------------------------------
     // 상태
     // -------------------------------------------------------
-    MonsterState            m_state = MonsterState::IDLE;
+    MonsterAIState          m_state = MonsterAIState::IDLE;
     long long               m_targetPlayerID = -1;  // 현재 추격 대상 ID
 
 public:
@@ -77,6 +77,8 @@ private:
     void BroadcastHPUpdate(const std::unordered_map<long long, SESSION*>& users);
     void BroadcastDeath(long long killerID, const std::unordered_map<long long, SESSION*>& users);
     void SendGoldReward(long long killerID, const std::unordered_map<long long, SESSION*>& users);
+
+    MonsterState ToClientAnimState() const;
 };
 
 class MonsterManager {

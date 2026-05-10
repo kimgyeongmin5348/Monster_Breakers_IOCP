@@ -1,7 +1,10 @@
 #include "workerthread.h"
+#include "Monster.h"
 #include "protocol.h"
 
 class SESSION;
+class Monster;
+class MonsterManager;
 
 HANDLE g_hIOCP;
 std::unordered_map<long long, SESSION*> g_session;
@@ -163,6 +166,11 @@ void SESSION::process_packet(unsigned char* p)
 		_right = packet->right;
 		_animState = packet->animState;  //애니메이션 완료되면 하기
 
+		std::cout << "[위치] ID=" << _id
+			<< " pos=(" << _position.x << ", "
+			<< _position.y << ", "
+			<< _position.z << ")\n";
+
 		sc_packet_move mp;
 		mp.size = sizeof(mp);
 		mp.type = SC_P_MOVE;
@@ -205,6 +213,74 @@ void SESSION::process_packet(unsigned char* p)
 		broadcast.look = packet->look;
 
 		BroadcastToAll(&broadcast, _id); // 본인 제외 전송
+		break;
+	}
+
+	case CS_P_HIT_DAMAGE:
+	{
+		cs_packet_hit_damage* packet = reinterpret_cast<cs_packet_hit_damage*>(p);
+
+		std::cout << "[서버] ID=" << _id
+			<< "번 플레이어 → 몬스터 ID=" << packet->monsterID
+			<< " 공격 요청. 데미지=" << packet->damage << "\n";
+
+		// 1. 데미지 값 검증 (비정상 값 방지)
+		if (packet->damage <= 0 || packet->damage > 9999)
+		{
+			std::cout << "[경고] ID=" << _id
+				<< " 비정상 데미지=" << packet->damage << " → 무시\n";
+			break;
+		}
+
+		// 2. 몬스터 존재 여부 확인
+		auto& monsterMap = MonsterManager::GetInstance().GetMonsters();
+		auto monIt = monsterMap.find(packet->monsterID);
+		if (monIt == monsterMap.end())
+		{
+			std::cout << "[경고] 존재하지 않는 몬스터 ID=" << packet->monsterID << " → 무시\n";
+			break;
+		}
+
+		Monster* pMonster = monIt->second;
+
+		// 3. 이미 죽은 몬스터면 무시
+		if (pMonster->IsDead())
+		{
+			std::cout << "[경고] 이미 죽은 몬스터 ID=" << packet->monsterID << " → 무시\n";
+			break;
+		}
+
+		// 4. 서버에서 거리 검증 (근접 공격 유효 범위)
+		const float MELEE_RANGE = 2.5f;
+		float dx = _position.x - pMonster->m_position.x;
+		float dz = _position.z - pMonster->m_position.z;
+		float dist = sqrtf(dx * dx + dz * dz);
+
+		if (dist > MELEE_RANGE)
+		{
+			std::cout << "[경고] ID=" << _id
+				<< " 범위 초과 공격 무시 (거리=" << dist
+				<< " > " << MELEE_RANGE << ")\n";
+			break;
+		}
+
+		std::cout << "[서버] 거리 검증 통과 (거리=" << dist << ")"
+			<< " → 몬스터 ID=" << packet->monsterID
+			<< " 데미지=" << packet->damage << " 처리\n";
+
+		// 5. 세션 스냅샷 복사 후 데미지 처리
+		std::unordered_map<long long, SESSION*> snapshot;
+		{
+			std::lock_guard<std::mutex> lock(g_session_mutex);
+			snapshot = g_session;
+		}
+
+		MonsterManager::GetInstance().OnMonsterHit(
+			packet->monsterID,
+			packet->damage,
+			_id,        // 공격한 플레이어 ID (골드 지급용)
+			snapshot
+		);
 		break;
 	}
 	default:

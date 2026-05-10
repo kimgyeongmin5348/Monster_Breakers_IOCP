@@ -48,7 +48,7 @@ public:
 	XMFLOAT3			_right;
 	uint8_t				_animState;
 	short				_hp = 100;
-	int					_gold = 100;
+	int					_gold;		// 초기 골드 설정
 	string				_name;
 	uint8_t				_job;
 	atomic<bool>		_is_sending{ false };
