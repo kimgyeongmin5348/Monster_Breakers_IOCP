@@ -6,9 +6,9 @@
 // ================================================================
 
 static const std::vector<XMFLOAT3> SPAWN_POSITIONS = {
-    { 100.000f,  0.000f,  -1.000f },
-    {  50.000f,  0.000f,  30.000f },
-    { -6.000f,  0.000f, 1.000f },
+    { -11.000,  0.100f,  35.000f },
+    { -20.000f,  0.100f,  53.000f },
+    { 6.700f,  0.290f, -5.500f },
 
 };
 
@@ -111,6 +111,11 @@ void Monster::UpdateAttack(float dt, const std::unordered_map<long long, SESSION
 
     SESSION* target = it->second;
     float dist = Distance(m_position, target->_position);
+
+    // 공격 대상이 방패막기 중이면 데미지 0
+    int finalDamage = target->_isBlocking ? 0 : m_attack;
+    target->_hp -= finalDamage;
+    cout << "[몬스터공격] 대상ID=" << target->_id << " isBlocking=" << target->_isBlocking << " damage=" << finalDamage << " remainHP=" << target->_hp << "\n";
 
     if (dist > m_attackRange)
     {

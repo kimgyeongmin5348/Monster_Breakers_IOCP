@@ -216,19 +216,129 @@ void SESSION::process_packet(unsigned char* p)
 		break;
 	}
 
+	case CS_P_SHIELD_BLOCK:
+	{
+		cs_packet_shield_block* packet = reinterpret_cast<cs_packet_shield_block*>(p);
+		_isBlocking = packet->isBlocking;
+
+		cout << "[방패막기] ID=" << _id << " isBlocking=" << _isBlocking << "\n";
+
+		sc_packet_shield_block pkt{};
+		pkt.size = sizeof(pkt);
+		pkt.type = SC_P_SHIELD_BLOCK;
+		pkt.playerID = _id;
+		pkt.isBlocking = _isBlocking;
+		BroadcastToAll(&pkt, _id);
+		break;
+	}
+
+	case CS_P_SKILL_STRIKE:
+	{
+		cs_packet_skill_strike* packet = reinterpret_cast<cs_packet_skill_strike*>(p);
+
+		cout << "[강타] ID=" << _id << " pos=(" << packet->position.x << "," << packet->position.y << "," << packet->position.z << ")\n";
+
+		sc_packet_skill_strike pkt{};
+		pkt.size = sizeof(pkt);
+		pkt.type = SC_P_SKILL_STRIKE;
+		pkt.playerID = _id;
+		pkt.position = packet->position;
+		pkt.look = packet->look;
+		BroadcastToAll(&pkt, _id);
+		break;
+	}
+
+	case CS_P_TAUNT:
+	{
+		cs_packet_taunt* packet = reinterpret_cast<cs_packet_taunt*>(p);
+		float tauntRange = packet->range;
+
+		int affected = 0;
+		auto& monsters = MonsterManager::GetInstance().GetMonsters();
+		for (auto& [monID, mon] : monsters) {
+			if (mon->IsDead()) continue;
+			float dx = mon->m_position.x - _position.x;
+			float dz = mon->m_position.z - _position.z;
+			float dist = sqrtf(dx * dx + dz * dz);
+			if (dist <= tauntRange) {
+				mon->m_targetPlayerID = _id;
+				mon->m_state = MonsterAIState::CHASE;
+				affected++;
+			}
+		}
+
+		cout << "[도발] ID=" << _id << " 범위=" << tauntRange << " 영향받은 몬스터=" << affected << "마리\n";
+
+		sc_packet_taunt pkt{};
+		pkt.size = sizeof(pkt);
+		pkt.type = SC_P_TAUNT;
+		pkt.playerID = _id;
+		BroadcastToAll(&pkt, _id);
+		break;
+	}
+
+	case CS_P_BUFF_ATK:
+	{
+		const int BUFF_AMOUNT = 20;
+		if (!_isAtkBuffed) {
+			_damage += BUFF_AMOUNT;
+			_isAtkBuffed = true;
+		}
+
+		cout << "[공격력버프] ID=" << _id << " newDamage=" << _damage << "\n";
+
+		sc_packet_buff_atk pkt{};
+		pkt.size = sizeof(pkt);
+		pkt.type = SC_P_BUFF_ATK;
+		pkt.playerID = _id;
+		pkt.newDamage = _damage;
+		BroadcastToAll(&pkt, -1);  // 자신 포함 전체 전송 (UI 갱신)
+		break;
+	}
+
+	case CS_P_BUFF_HP:
+	{
+		const short HP_GAIN = 30;
+		const short MAX_HP = 200;
+		_hp = min((short)(_hp + HP_GAIN), MAX_HP);
+
+		cout << "[체력버프] ID=" << _id << " newHP=" << _hp << "\n";
+
+		sc_packet_buff_hp pkt{};
+		pkt.size = sizeof(pkt);
+		pkt.type = SC_P_BUFF_HP;
+		pkt.playerID = _id;
+		pkt.newHp = _hp;
+		BroadcastToAll(&pkt, -1);  // 자신 포함 전체 전송
+		break;
+	}
+
+	case CS_P_WEAPON_POS:
+	{
+		cs_packet_weapon_pos* packet = reinterpret_cast<cs_packet_weapon_pos*>(p);
+
+		cout << "[도끼위치] ID=" << _id << " pos=(" << packet->weaponPosition.x << "," << packet->weaponPosition.y << "," << packet->weaponPosition.z << ")\n";
+
+		sc_packet_weapon_pos pkt{};
+		pkt.size = sizeof(pkt);
+		pkt.type = SC_P_WEAPON_POS;
+		pkt.playerID = _id;
+		pkt.weaponPosition = packet->weaponPosition;
+		pkt.weaponRotation = packet->weaponRotation;
+		BroadcastToAll(&pkt, _id);
+		break;
+	}
+
 	case CS_P_HIT_DAMAGE:
 	{
 		cs_packet_hit_damage* packet = reinterpret_cast<cs_packet_hit_damage*>(p);
 
-		std::cout << "[서버] ID=" << _id
-			<< "번 플레이어 → 몬스터 ID=" << packet->monsterID
-			<< " 공격 요청. 데미지=" << packet->damage << "\n";
+		cout << "[서버] ID=" << _id << "번 플레이어 → 몬스터 ID=" << packet->monsterID << " 공격 요청. 데미지=" << packet->damage << "\n";
 
 		// 1. 데미지 값 검증 (비정상 값 방지)
 		if (packet->damage <= 0 || packet->damage > 9999)
 		{
-			std::cout << "[경고] ID=" << _id
-				<< " 비정상 데미지=" << packet->damage << " → 무시\n";
+			cout << "[경고] ID=" << _id << " 비정상 데미지=" << packet->damage << " → 무시\n";
 			break;
 		}
 
@@ -237,7 +347,7 @@ void SESSION::process_packet(unsigned char* p)
 		auto monIt = monsterMap.find(packet->monsterID);
 		if (monIt == monsterMap.end())
 		{
-			std::cout << "[경고] 존재하지 않는 몬스터 ID=" << packet->monsterID << " → 무시\n";
+			cout << "[경고] 존재하지 않는 몬스터 ID=" << packet->monsterID << " → 무시\n";
 			break;
 		}
 

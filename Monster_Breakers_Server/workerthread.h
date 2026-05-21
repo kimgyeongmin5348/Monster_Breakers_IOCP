@@ -43,6 +43,10 @@ public:
 	EXP_OVER			_recv_over{ IO_RECV };
 	unsigned char		_remained;
 
+	bool				_isBlocking = false;
+	int					_damage = 10;       // 기본 공격력
+	bool				_isAtkBuffed = false;
+
 	XMFLOAT3			_position;
 	XMFLOAT3			_look;
 	XMFLOAT3			_right;

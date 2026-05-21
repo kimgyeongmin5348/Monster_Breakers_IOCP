@@ -38,6 +38,25 @@ constexpr char CS_P_HIT_DAMAGE = 30;
 constexpr char CS_P_LOADING_DONE = 25;
 
 
+// 기사
+constexpr char CS_P_SHIELD_BLOCK = 31;  
+constexpr char SC_P_SHIELD_BLOCK = 32; 
+constexpr char CS_P_SKILL_STRIKE = 33; 
+constexpr char SC_P_SKILL_STRIKE = 34;  
+constexpr char CS_P_TAUNT = 35; 
+constexpr char SC_P_TAUNT = 36;  
+
+// 법사
+constexpr char CS_P_BUFF_ATK = 40;
+constexpr char SC_P_BUFF_ATK = 41; 
+constexpr char CS_P_BUFF_HP = 42; 
+constexpr char SC_P_BUFF_HP = 43; 
+
+// 도적
+constexpr char CS_P_WEAPON_POS = 50; 
+constexpr char SC_P_WEAPON_POS = 51;  
+
+
 // =================== 주의!! ========================
 // 
 // 1. 애니메이션 동기화는 클라에서 애니메이션 완료하면 하기
@@ -169,6 +188,84 @@ struct sc_packet_skill {
 	XMFLOAT3			look;
 };
 
+struct cs_packet_shield_block {
+	unsigned char   size;
+	char            type;
+	bool            isBlocking;   // true=시작, false=종료
+};
+
+struct sc_packet_shield_block {
+	unsigned char   size;
+	char            type;
+	long long       playerID;
+	bool            isBlocking;
+};
+
+struct cs_packet_skill_strike {
+	unsigned char   size;
+	char            type;
+	XMFLOAT3        position;
+	XMFLOAT3        look;
+};
+
+struct sc_packet_skill_strike {
+	unsigned char   size;
+	char            type;
+	long long       playerID;
+	XMFLOAT3        position;
+	XMFLOAT3        look;
+};
+
+struct cs_packet_taunt {
+	unsigned char   size;
+	char            type;
+	float           range;    // 도발 범위 (ex. 8.0f)
+};
+
+struct sc_packet_taunt {
+	unsigned char   size;
+	char            type;
+	long long       playerID;  // 도발한 플레이어
+};
+
+struct cs_packet_buff_atk {
+	unsigned char   size;
+	char            type;
+};
+
+struct sc_packet_buff_atk {
+	unsigned char   size;
+	char            type;
+	long long       playerID;
+	int             newDamage;  // 변경된 공격력 값
+};
+
+struct cs_packet_buff_hp {
+	unsigned char   size;
+	char            type;
+};
+
+struct sc_packet_buff_hp {
+	unsigned char   size;
+	char            type;
+	long long       playerID;
+	short           newHp;   // 변경된 HP 값
+};
+
+struct cs_packet_weapon_pos {
+	unsigned char   size;
+	char            type;
+	XMFLOAT3        weaponPosition;
+	XMFLOAT3        weaponRotation;   // 도끼 회전값 (필요 시)
+};
+
+struct sc_packet_weapon_pos {
+	unsigned char   size;
+	char            type;
+	long long       playerID;
+	XMFLOAT3        weaponPosition;
+	XMFLOAT3        weaponRotation;
+};
 
 // Monster
 enum class MonsterState : uint8_t {
