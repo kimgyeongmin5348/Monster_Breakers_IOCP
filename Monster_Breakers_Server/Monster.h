@@ -100,5 +100,5 @@ private:
 
     std::unordered_map<long long, Monster*> m_monsters;
     std::mutex                              m_mutex;
-    long long                               m_idCounter = 1000;
+    long long                               m_idCounter = 10001;
 };
