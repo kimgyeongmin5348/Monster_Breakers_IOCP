@@ -211,7 +211,22 @@ void SESSION::process_packet(unsigned char* p)
 
 		BroadcastToAll(&new_user_pkt, _id);
 
+		auto& monsters = MonsterManager::GetInstance().GetMonsters();
+		for (auto& [monID, mon] : monsters)
+		{
+			if (mon->IsDead()) continue;
 
+			sc_packet_monster_spawn spawnPkt{};
+			spawnPkt.size = sizeof(spawnPkt);
+			spawnPkt.type = SC_P_MONSTER_SPAWN;
+			spawnPkt.monsterID = monID;
+			spawnPkt.position = mon->m_position;
+			spawnPkt.hp = mon->m_hp;
+			spawnPkt.state = 0;
+			do_send(&spawnPkt);  // 본인에게만
+		}
+
+		cout << "[로그인] ID=" << _id << " 몬스터 " << monsters.size() << "마리 전송\n";
 
 		break;
 	}
