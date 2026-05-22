@@ -112,9 +112,11 @@ void Monster::UpdateAttack(float dt, const std::unordered_map<long long, SESSION
     SESSION* target = it->second;
     float dist = Distance(m_position, target->_position);
 
-    // 공격 대상이 방패막기 중이면 데미지 0
     int finalDamage = target->_isBlocking ? 0 : m_attack;
     target->_hp -= finalDamage;
+
+    CheckAndHandleDeath(target);
+
     cout << "[몬스터공격] 대상ID=" << target->_id << " isBlocking=" << target->_isBlocking << " damage=" << finalDamage << " remainHP=" << target->_hp << "\n";
 
     if (dist > m_attackRange)
@@ -171,9 +173,7 @@ void Monster::TakeDamage(int damage, long long attackerID, std::unordered_map<lo
     if (m_isDead) return;
 
     m_hp -= damage;
-    std::cout << "[몬스터] ID=" << m_id
-        << " 피격! 데미지=" << damage
-        << " 남은HP=" << m_hp << "\n";
+    cout << "[몬스터] ID=" << m_id << " 피격! 데미지=" << damage << " 남은HP=" << m_hp << "\n";
 
     BroadcastHPUpdate(users);
 
@@ -309,7 +309,7 @@ void MonsterManager::SpawnMonsters(int count)
         m_monsters[id] = new Monster(id, SPAWN_POSITIONS[i]);
     }
 
-    std::cout << "[몬스터 매니저] " << spawnCount << "마리 스폰 완료\n";
+    cout << "[몬스터 매니저] " << spawnCount << "마리 스폰 완료\n";
 }
 
 void MonsterManager::Update(float dt, const std::unordered_map<long long, SESSION*>& users)
@@ -329,7 +329,7 @@ void MonsterManager::OnMonsterHit(long long monsterID, int damage, long long att
     auto it = m_monsters.find(monsterID);
     if (it == m_monsters.end())
     {
-        std::cout << "[경고] 존재하지 않는 몬스터 ID=" << monsterID << "\n";
+        cout << "[경고] 존재하지 않는 몬스터 ID=" << monsterID << "\n";
         return;
     }
     it->second->TakeDamage(damage, attackerID, users);

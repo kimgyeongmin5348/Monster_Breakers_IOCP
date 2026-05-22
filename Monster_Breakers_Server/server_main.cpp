@@ -56,7 +56,6 @@ int main()
 		{
 			auto start = clock::now();
 
-			// g_session Ω∫≥¿º¶ ∫πªÁ (π¬≈ÿΩ∫ √÷º“»≠)
 			std::unordered_map<long long, SESSION*> userSnapshot;
 			{
 				std::lock_guard<std::mutex> lock(g_session_mutex);

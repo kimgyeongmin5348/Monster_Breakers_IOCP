@@ -22,6 +22,32 @@ const char* GetJobName(uint8_t job) {
 	}
 }
 
+// 스킬 사용자로부터 가장 가까운 다른 플레이어 찾기
+SESSION* FindClosestPlayer(long long myID, const XMFLOAT3& myPos)
+{
+	SESSION* closest = nullptr;
+	float minDist = FLT_MAX;
+
+	std::lock_guard<std::mutex> lock(g_session_mutex);
+	for (auto& [id, session] : g_session)
+	{
+		if (id == myID) continue;  // 자신 제외
+
+		float dx = session->_position.x - myPos.x;
+		float dz = session->_position.z - myPos.z;
+		float dist = sqrtf(dx * dx + dz * dz);
+
+		if (dist < minDist) {
+			minDist = dist;
+			closest = session;
+		}
+	}
+
+	cout << "[FindClosest] 스킬사용자 ID=" << myID << " 가장 가까운 플레이어 ID=" << (closest ? closest->_id : -1) << " 거리=" << minDist << "\n";
+
+	return closest;
+}
+
 // SESSION 구현
 SESSION::SESSION(long long session_id, SOCKET s) : _id(session_id), _c_socket(s), _recv_over(IO_RECV)
 {
@@ -75,6 +101,22 @@ void SESSION::do_send(void* buff) {
 	}
 }
 
+void SESSION::Respawn()
+{
+	_hp = 100;
+	_isDead = false;
+	_position = _spawnPos;
+
+	cout << "[리스폰] ID=" << _id << " HP=" << _hp << " pos=(" << _position.x << "," << _position.y << "," << _position.z << ")\n";
+
+	sc_packet_respawn pkt{};
+	pkt.size = sizeof(pkt);
+	pkt.type = SC_P_RESPAWN;
+	pkt.playerID = _id;
+	pkt.position = _spawnPos;
+	pkt.hp = _hp;
+	BroadcastToAll(&pkt, -1);
+}
 
 void SESSION::send_player_info_packet()
 {
@@ -106,6 +148,14 @@ void SESSION::process_packet(unsigned char* p)
 		}
 
 		cout << "[서버] " << _id << "번 클라이언트 로그인: " << _name << "(직업 :" << GetJobName(_job) << ")" << endl;
+
+		switch (_job) {
+		case JOB_WARRIOR: _spawnPos = { 0.0f, 1.0f,  22.0f }; break;
+		case JOB_MAGE:    _spawnPos = { 0.0f, 1.0f,  21.0f }; break;
+		case JOB_THIEF:   _spawnPos = { 0.0f, 1.0f,  23.0f }; break;
+		default:          _spawnPos = { 0.0f, 0.0f,  0.0f }; break;
+		}
+		_position = _spawnPos;
 
 		// 1. 자신의 정보 전송
 		send_player_info_packet();
@@ -166,10 +216,7 @@ void SESSION::process_packet(unsigned char* p)
 		_right = packet->right;
 		_animState = packet->animState;  //애니메이션 완료되면 하기
 
-		std::cout << "[위치] ID=" << _id
-			<< " pos=(" << _position.x << ", "
-			<< _position.y << ", "
-			<< _position.z << ")\n";
+		//cout << "[위치] ID=" << _id<< " pos=(" << _position.x << ", "	<< _position.y << ", "	<< _position.z << ")\n";
 
 		sc_packet_move mp;
 		mp.size = sizeof(mp);
@@ -279,27 +326,33 @@ void SESSION::process_packet(unsigned char* p)
 
 	case CS_P_BUFF_ATK:
 	{
-		const int BUFF_AMOUNT = 20;
-		if (!_isAtkBuffed) {
-			_damage += BUFF_AMOUNT;
-			_isAtkBuffed = true;
+
+		SESSION* target = FindClosestPlayer(_id, _position);
+
+		if (!target) {
+			target = this;
+			cout << "[BUFF_ATK] 혼자 → 자기 자신에게 버프\n";
 		}
 
-		cout << "[공격력버프] ID=" << _id << " newDamage=" << _damage << "\n";
+		target->_damage += 20;
+
+		cout << "[BUFF_ATK] 시전자ID=" << _id << " → 대상ID=" << target->_id << " newDamage=" << target->_damage << "\n";
+
 
 		sc_packet_buff_atk pkt{};
 		pkt.size = sizeof(pkt);
 		pkt.type = SC_P_BUFF_ATK;
 		pkt.playerID = _id;
 		pkt.newDamage = _damage;
-		BroadcastToAll(&pkt, -1);  // 자신 포함 전체 전송 (UI 갱신)
+		BroadcastToAll(&pkt, -1);
 		break;
 	}
 
 	case CS_P_BUFF_HP:
 	{
+
 		const short HP_GAIN = 30;
-		const short MAX_HP = 200;
+		const short MAX_HP = 100;
 		_hp = min((short)(_hp + HP_GAIN), MAX_HP);
 
 		cout << "[체력버프] ID=" << _id << " newHP=" << _hp << "\n";
@@ -309,7 +362,37 @@ void SESSION::process_packet(unsigned char* p)
 		pkt.type = SC_P_BUFF_HP;
 		pkt.playerID = _id;
 		pkt.newHp = _hp;
-		BroadcastToAll(&pkt, -1);  // 자신 포함 전체 전송
+		BroadcastToAll(&pkt, -1);
+
+		std::vector<SESSION*> targets;
+		{
+			std::lock_guard<std::mutex> lock(g_session_mutex);
+			for (auto& [id, session] : g_session)
+			{
+				if (id == _id) continue;
+				targets.push_back(session);
+			}
+		}
+
+		for (SESSION* target : targets)
+		{
+			if (target->_isDead) continue;
+
+			short beforeHp = target->_hp;
+			target->_hp = min((short)(target->_hp + HP_GAIN), MAX_HP);
+
+			cout << "[BUFF_HP] 시전자 ID=" << _id << " → 대상 ID=" << target->_id << " HP: " << beforeHp << " → " << target->_hp << "\n";
+
+			sc_packet_buff_hp pkt{};
+			pkt.size = sizeof(pkt);
+			pkt.type = SC_P_BUFF_HP;
+			pkt.playerID = target->_id;
+			pkt.newHp = target->_hp;
+			BroadcastToAll(&pkt, -1);
+		}
+
+		cout << "[BUFF_HP] 총 " << targets.size() + 1 << "명 회복 완료\n";
+
 		break;
 	}
 
@@ -400,7 +483,31 @@ void SESSION::process_packet(unsigned char* p)
 
 }
 
+void CheckAndHandleDeath(SESSION* target)
+{
+	if (target->_hp > 0 || target->_isDead) return;
 
+	target->_hp = 0;
+	target->_isDead = true;
+
+	int beforeGold = target->_gold;
+	target->_gold = target->_gold / 2;
+
+	cout << "[사망] ID=" << target->_id << " 골드 패널티: " << beforeGold << " → " << target->_gold << "G\n";
+
+	sc_packet_gold_reward goldPkt{};
+	goldPkt.size = sizeof(goldPkt);
+	goldPkt.type = SC_P_GOLD_REWARD;
+	goldPkt.playerID = target->_id;
+	goldPkt.amount = -(beforeGold - target->_gold);
+	goldPkt.totalGold = target->_gold;
+	target->do_send(&goldPkt);
+
+	target->Respawn();
+
+	cout << "[사망] ID=" << target->_id << " 사망 처리 → 3초 후 리스폰\n";
+
+}
 
 void BroadcastToAll(void* pkt, long long exclude_id = -1) {
 	unsigned char packet_size = reinterpret_cast<unsigned char*>(pkt)[0];

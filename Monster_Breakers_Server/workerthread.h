@@ -52,10 +52,14 @@ public:
 	XMFLOAT3			_right;
 	uint8_t				_animState;
 	short				_hp = 100;
-	int					_gold;		// 초기 골드 설정
+	int					_gold = 1000;		// 초기 골드 설정
 	string				_name;
 	uint8_t				_job;
 	atomic<bool>		_is_sending{ false };
+
+	bool				_isDead = false;
+	float				_respawnTimer = 0.0f;
+	XMFLOAT3			_spawnPos = { 0.0f, 0.0f, 0.0f };
 
 public:
 	SESSION() = delete;
@@ -70,7 +74,7 @@ public:
 	void do_send(void* buff);
 	void send_player_info_packet();
 	void process_packet(unsigned char* p);
-
+	void Respawn();
 	void SetAnimationState(uint8_t state) { _animState = state; }
 	uint8_t GetAnimationState() const { return _animState; }
 
@@ -81,3 +85,5 @@ void print_error_message(int s_err);
 void do_accept(SOCKET s_socket);
 void CloseSession(long long id);
 void WorkerThread();
+
+void CheckAndHandleDeath(SESSION* target);

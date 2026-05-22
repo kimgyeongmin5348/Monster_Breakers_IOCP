@@ -56,6 +56,7 @@ constexpr char SC_P_BUFF_HP = 43;
 constexpr char CS_P_WEAPON_POS = 50; 
 constexpr char SC_P_WEAPON_POS = 51;  
 
+constexpr char SC_P_RESPAWN = 60;
 
 // =================== 주의!! ========================
 // 
@@ -165,6 +166,13 @@ struct cs_packet_move {
 	uint8_t				animState;
 };
 
+struct sc_packet_respawn {
+	unsigned char		size;
+	char				type;
+	long long			playerID;
+	XMFLOAT3			position;
+	short				hp;
+};
 
 // skill
 enum class SkillType : uint8_t {
