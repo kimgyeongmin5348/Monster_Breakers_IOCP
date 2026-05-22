@@ -109,13 +109,21 @@ void SESSION::Respawn()
 
 	cout << "[리스폰] ID=" << _id << " HP=" << _hp << " pos=(" << _position.x << "," << _position.y << "," << _position.z << ")\n";
 
-	sc_packet_respawn pkt{};
-	pkt.size = sizeof(pkt);
-	pkt.type = SC_P_RESPAWN;
-	pkt.playerID = _id;
-	pkt.position = _spawnPos;
-	pkt.hp = _hp;
-	BroadcastToAll(&pkt, -1);
+
+	send_player_info_packet();
+
+	sc_packet_enter enterPkt{};
+	enterPkt.size = sizeof(enterPkt);
+	enterPkt.type = SC_P_ENTER;
+	enterPkt.id = _id;
+	enterPkt.position = _spawnPos;
+	enterPkt.look = _look;
+	enterPkt.right = _right;
+	enterPkt.animState = (uint8_t)AnimationState::IDLE;
+	enterPkt.hp = _hp;
+	enterPkt.job = _job;
+	BroadcastToAll(&enterPkt, _id);
+
 }
 
 void SESSION::send_player_info_packet()
@@ -150,9 +158,9 @@ void SESSION::process_packet(unsigned char* p)
 		cout << "[서버] " << _id << "번 클라이언트 로그인: " << _name << "(직업 :" << GetJobName(_job) << ")" << endl;
 
 		switch (_job) {
-		case JOB_WARRIOR: _spawnPos = { 0.0f, 1.0f,  22.0f }; break;
-		case JOB_MAGE:    _spawnPos = { 0.0f, 1.0f,  21.0f }; break;
-		case JOB_THIEF:   _spawnPos = { 0.0f, 1.0f,  23.0f }; break;
+		case JOB_WARRIOR: _spawnPos = { 3.0f, 0.0f,  20.0f }; break;
+		case JOB_MAGE:    _spawnPos = { 3.0f, 0.0f,  21.0f }; break;
+		case JOB_THIEF:   _spawnPos = { 3.0f, 0.0f,  22.0f }; break;
 		default:          _spawnPos = { 0.0f, 0.0f,  0.0f }; break;
 		}
 		_position = _spawnPos;
@@ -240,6 +248,41 @@ void SESSION::process_packet(unsigned char* p)
 
 		//몬스터 정보 전송 부분 (초기 스폰위치와 상태)
 
+		break;
+	}
+
+	case CS_P_USE_GOLD:
+	{
+		cs_packet_use_gold* packet = reinterpret_cast<cs_packet_use_gold*>(p);
+		int cost = packet->amount;
+
+
+		if (_gold < cost) {
+			cout << "[GOLD] ID=" << _id << " 골드 부족 (보유=" << _gold << " 필요=" << cost << ") → 거부\n";
+
+
+			sc_packet_gold_reward revertPkt{};
+			revertPkt.size = sizeof(revertPkt);
+			revertPkt.type = SC_P_GOLD_REWARD;
+			revertPkt.playerID = _id;
+			revertPkt.amount = cost;
+			revertPkt.totalGold = _gold;
+			do_send(&revertPkt);
+			break;
+		}
+
+		_gold -= cost;
+
+		cout << "[GOLD] ID=" << _id << " 골드 사용 -" << cost << "G (남은=" << _gold << "G)\n";
+
+
+		sc_packet_gold_reward syncPkt{};
+		syncPkt.size = sizeof(syncPkt);
+		syncPkt.type = SC_P_GOLD_REWARD;
+		syncPkt.playerID = _id;
+		syncPkt.amount = -cost;
+		syncPkt.totalGold = _gold;
+		do_send(&syncPkt);
 		break;
 	}
 
@@ -503,7 +546,7 @@ void CheckAndHandleDeath(SESSION* target)
 	goldPkt.totalGold = target->_gold;
 	target->do_send(&goldPkt);
 
-	target->Respawn();
+	target->_respawnTimer = 0.01f;
 
 	cout << "[사망] ID=" << target->_id << " 사망 처리 → 3초 후 리스폰\n";
 

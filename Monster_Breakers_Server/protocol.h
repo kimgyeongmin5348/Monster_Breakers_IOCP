@@ -57,6 +57,7 @@ constexpr char CS_P_WEAPON_POS = 50;
 constexpr char SC_P_WEAPON_POS = 51;  
 
 constexpr char SC_P_RESPAWN = 60;
+constexpr char CS_P_USE_GOLD = 61;
 
 // =================== 주의!! ========================
 // 
@@ -172,6 +173,12 @@ struct sc_packet_respawn {
 	long long			playerID;
 	XMFLOAT3			position;
 	short				hp;
+};
+
+struct cs_packet_use_gold {
+	unsigned char   size;
+	char            type;
+	int             amount;   // 사용할 골드량
 };
 
 // skill

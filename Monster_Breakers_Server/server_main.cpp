@@ -64,6 +64,29 @@ int main()
 
 			MonsterManager::GetInstance().Update(TICK_RATE, userSnapshot);
 
+			std::vector<SESSION*> toRespawn;
+			{
+				std::lock_guard<std::mutex> lock(g_session_mutex);
+				for (auto& [id, session] : g_session)
+				{
+					if (!session->_isDead) continue;
+					if (session->_respawnTimer <= 0.0f) continue;
+
+					session->_respawnTimer -= TICK_RATE;
+
+					if (session->_respawnTimer <= 0.0f)
+					{
+						session->_respawnTimer = 0.0f;
+						toRespawn.push_back(session);  // 목록에만 추가
+					}
+				}
+			} 
+
+			for (SESSION* session : toRespawn)
+			{
+				session->Respawn();
+			}
+
 			// 남은 틱 시간만큼 sleep
 			auto elapsed = std::chrono::duration<float>(clock::now() - start).count();
 			float sleepTime = TICK_RATE - elapsed;
