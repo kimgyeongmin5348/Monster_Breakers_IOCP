@@ -357,6 +357,7 @@ void SESSION::process_packet(unsigned char* p)
 	{
 		cs_packet_taunt* packet = reinterpret_cast<cs_packet_taunt*>(p);
 		float tauntRange = packet->range;
+		const float TAUNT_DURATION = 5.0f;
 
 		int affected = 0;
 		auto& monsters = MonsterManager::GetInstance().GetMonsters();
@@ -366,8 +367,13 @@ void SESSION::process_packet(unsigned char* p)
 			float dz = mon->m_position.z - _position.z;
 			float dist = sqrtf(dx * dx + dz * dz);
 			if (dist <= tauntRange) {
+				mon->m_isTaunted = true;
+				mon->m_tauntTargetID = _id;
+				mon->m_tauntTimer = TAUNT_DURATION;
 				mon->m_targetPlayerID = _id;
 				mon->m_state = MonsterAIState::CHASE;
+				mon->m_originalLeaveRange = mon->m_leaveRange;
+				mon->m_leaveRange = tauntRange;
 				affected++;
 			}
 		}

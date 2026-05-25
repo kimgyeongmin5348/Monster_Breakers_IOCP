@@ -18,11 +18,13 @@ public:
     // -------------------------------------------------------
     // 식별자
     // -------------------------------------------------------
+
     long long   m_id;           // 몬스터 고유 ID
 
     // -------------------------------------------------------
     // 스탯
     // -------------------------------------------------------
+
     int         m_hp = 100;
     int         m_maxHp = 100;
     int         m_attack = 5;
@@ -33,24 +35,37 @@ public:
     // -------------------------------------------------------
     // 위치 정보
     // -------------------------------------------------------
+
     XMFLOAT3    m_position;
     XMFLOAT3    m_spawnPosition;      // 스폰 위치 (복귀 목적지)
     XMFLOAT3    m_look;
 
     // -------------------------------------------------------
-    // 공격
+    // 범위 / 쿨타임
     // -------------------------------------------------------
+
     float       m_detectRange = 5.0f;
     float       m_attackRange = 2.0f;
     float       m_leaveRange = 5.0f;
-    float       m_attackCooldown = 1.5f;
+    float       m_originalLeaveRange = 5.0f;   // 도발 해제 시 복구용
+    float       m_attackCooldown = 3.0f;   // 공격 쿨타임 3초
     float       m_attackCooldownTimer = 0.0f;
 
     // -------------------------------------------------------
     // 상태
     // -------------------------------------------------------
+
     MonsterAIState          m_state = MonsterAIState::IDLE;
     long long               m_targetPlayerID = -1;  // 현재 추격 대상 ID
+
+    // -------------------------------------------------------
+    // 도발
+    // -------------------------------------------------------
+
+    bool        m_isTaunted = false;
+    long long   m_tauntTargetID = -1;
+    float       m_tauntTimer = 0.0f;
+    float       m_tauntDuration = 5.0f;
 
 public:
     Monster(long long id, const XMFLOAT3& spawnPos);

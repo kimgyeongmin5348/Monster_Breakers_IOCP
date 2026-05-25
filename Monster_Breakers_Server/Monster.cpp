@@ -36,12 +36,78 @@ MonsterState Monster::ToClientAnimState() const
     }
 }
 
+// ================================================================
+// Update
+// ================================================================
+
 void Monster::Update(float dt, const std::unordered_map<long long, SESSION*>& users)
 {
     if (m_isDead) return;
 
-    if (m_attackCooldownTimer > 0.0f)
-        m_attackCooldownTimer -= dt;
+    m_attackCooldownTimer -= dt;
+
+    if (m_isTaunted)
+    {
+        m_tauntTimer -= dt;
+        if (m_tauntTimer <= 0.0f)
+        {
+            cout << "[도발] ID=" << m_id << " 도발 만료\n";
+
+            m_isTaunted = false;
+            m_tauntTargetID = -1;
+            m_leaveRange = m_originalLeaveRange;
+
+            // 도발 만료 후 - 현재 상태 유지하되 주변 플레이어 재탐색
+            // 1. 현재 타겟이 아직 감지 범위 안에 있으면 -> 그대로 계속 공격
+            auto it = users.find(m_targetPlayerID);
+            if (it != users.end())
+            {
+                float dist = Distance(m_position, it->second->_position);
+                if (dist <= m_detectRange)
+                {
+                    // 타겟이 아직 가까이 있음 -> 상태 유지, 아무것도 안 함
+                    cout << "[도발만료] ID=" << m_id << " 타겟 아직 범위 내 -> 공격 유지\n";
+                    // m_state 건드리지 않음
+                }
+                else
+                {
+                    // 타겟이 멀어짐 -> 주변 재탐색
+                    float nearDist;
+                    SESSION* next = FindClosestPlayerInRange(users, m_detectRange, nearDist);
+                    if (next)
+                    {
+                        m_targetPlayerID = next->_id;
+                        m_state = MonsterAIState::CHASE;
+                        cout << "[도발만료] ID=" << m_id << " 새 타겟=" << next->_id << "\n";
+                    }
+                    else
+                    {
+                        m_state = MonsterAIState::RETURN;
+                        m_targetPlayerID = -1;
+                        cout << "[도발만료] ID=" << m_id << " 주변 없음 -> 복귀\n";
+                    }
+                }
+            }
+            else
+            {
+                // 타겟 자체가 없음 -> 주변 재탐색
+                float nearDist;
+                SESSION* next = FindClosestPlayerInRange(users, m_detectRange, nearDist);
+                if (next)
+                {
+                    m_targetPlayerID = next->_id;
+                    m_state = MonsterAIState::CHASE;
+                    cout << "[도발만료] ID=" << m_id << " 새 타겟=" << next->_id << "\n";
+                }
+                else
+                {
+                    m_state = MonsterAIState::RETURN;
+                    m_targetPlayerID = -1;
+                    cout << "[도발만료] ID=" << m_id << " 주변 없음 -> 복귀\n";
+                }
+            }
+        }
+    }
 
     switch (m_state)
     {
@@ -52,23 +118,55 @@ void Monster::Update(float dt, const std::unordered_map<long long, SESSION*>& us
     }
 }
 
-
 void Monster::UpdateIdle(float dt, const std::unordered_map<long long, SESSION*>& users)
 {
-    float dist = 0.0f;
+
+    if (m_isTaunted && m_tauntTargetID != -1)
+    {
+        auto it = users.find(m_tauntTargetID);
+        if (it != users.end())
+        {
+            float dist = Distance(m_position, it->second->_position);
+            if (dist <= m_leaveRange)
+            {
+                m_targetPlayerID = m_tauntTargetID;
+                m_state = MonsterAIState::CHASE;
+                cout << "[도발] ID=" << m_id << " 도발 타겟 추격 시작 ID=" << m_tauntTargetID << "\n";
+                BroadcastMove(users);
+                return;
+            }
+        }
+    }
+
+    float dist;
     SESSION* closest = FindClosestPlayerInRange(users, m_detectRange, dist);
     if (!closest) return;
 
     m_targetPlayerID = closest->_id;
     m_state = MonsterAIState::CHASE;
-    std::cout << "[몬스터] ID=" << m_id << " IDLE → CHASE (타겟=" << m_targetPlayerID << " 거리=" << dist << ")\n";
+    cout << "[몬스터] ID=" << m_id << " IDLE → CHASE (타겟=" << m_targetPlayerID << " 거리=" << dist << ")\n";
+
+    BroadcastMove(users);
 }
 
 void Monster::UpdateChase(float dt, const std::unordered_map<long long, SESSION*>& users)
 {
+
+    if (m_isTaunted && m_tauntTargetID != -1)
+        m_targetPlayerID = m_tauntTargetID;
+
     auto it = users.find(m_targetPlayerID);
     if (it == users.end())
     {
+
+        float dist;
+        SESSION* next = FindClosestPlayerInRange(users, m_detectRange, dist);
+        if (next) {
+            m_targetPlayerID = next->_id;
+            cout << "[몬스터] ID=" << m_id << " 타겟소실 -> 새 타겟=" << next->_id << "\n";
+            return;
+        }
+
         m_state = MonsterAIState::RETURN;
         m_targetPlayerID = -1;
         return;
@@ -79,6 +177,15 @@ void Monster::UpdateChase(float dt, const std::unordered_map<long long, SESSION*
 
     if (dist > m_leaveRange)
     {
+
+        float nearDist;
+        SESSION* next = FindClosestPlayerInRange(users, m_detectRange, nearDist);
+        if (next && next->_id != m_targetPlayerID) {
+            m_targetPlayerID = next->_id;
+            cout << "[몬스터] ID=" << m_id << " 타겟이탈 -> 새 타겟=" << next->_id << "\n";
+            return;
+        }
+
         m_state = MonsterAIState::RETURN;
         m_targetPlayerID = -1;
         cout << "[몬스터] ID=" << m_id << " CHASE → RETURN (거리=" << dist << " > " << m_leaveRange << ")\n";
@@ -88,6 +195,7 @@ void Monster::UpdateChase(float dt, const std::unordered_map<long long, SESSION*
     if (dist <= m_attackRange)
     {
         m_state = MonsterAIState::ATTACK;
+        BroadcastMove(users);
         return;
     }
 
@@ -95,15 +203,27 @@ void Monster::UpdateChase(float dt, const std::unordered_map<long long, SESSION*
     m_look = dir;
     m_position.x += dir.x * m_moveSpeed * dt;
     m_position.z += dir.z * m_moveSpeed * dt;
-
     BroadcastMove(users);
 }
 
 void Monster::UpdateAttack(float dt, const std::unordered_map<long long, SESSION*>& users)
 {
+
+    if (m_isTaunted && m_tauntTargetID != -1)
+        m_targetPlayerID = m_tauntTargetID;
+
     auto it = users.find(m_targetPlayerID);
     if (it == users.end())
     {
+        float dist;
+        SESSION* next = FindClosestPlayerInRange(users, m_detectRange, dist);
+        if (next)
+        {
+            m_targetPlayerID = next->_id;
+            m_state = MonsterAIState::CHASE;
+            cout << "[몬스터] ID=" << m_id << " 공격타겟소실 -> 새 타겟=" << next->_id << "\n";
+            return;
+        }
         m_state = MonsterAIState::RETURN;
         m_targetPlayerID = -1;
         return;
@@ -112,20 +232,23 @@ void Monster::UpdateAttack(float dt, const std::unordered_map<long long, SESSION
     SESSION* target = it->second;
     float dist = Distance(m_position, target->_position);
 
-    int finalDamage = target->_isBlocking ? 0 : m_attack;
-    target->_hp -= finalDamage;
-
-    CheckAndHandleDeath(target);
-
-    cout << "[몬스터공격] 대상ID=" << target->_id << " isBlocking=" << target->_isBlocking << " damage=" << finalDamage << " remainHP=" << target->_hp << "\n";
-
     if (dist > m_attackRange)
     {
         if (dist > m_leaveRange)
         {
+            // leaveRange 벗어나도 주변 재탐색 먼저
+            float nearDist;
+            SESSION* next = FindClosestPlayerInRange(users, m_detectRange, nearDist);
+            if (next && next->_id != m_targetPlayerID)
+            {
+                m_targetPlayerID = next->_id;
+                m_state = MonsterAIState::CHASE;
+                cout << "[몬스터] ID=" << m_id << " 공격타겟이탈 -> 새 타겟=" << next->_id << "\n";
+                return;
+            }
             m_state = MonsterAIState::RETURN;
             m_targetPlayerID = -1;
-            cout << "[몬스터] ID=" << m_id << " ATTACK → RETURN\n";
+            cout << "[몬스터] ID=" << m_id << " ATTACK -> RETURN\n";
         }
         else
         {
@@ -134,16 +257,20 @@ void Monster::UpdateAttack(float dt, const std::unordered_map<long long, SESSION
         return;
     }
 
+    // 쿨타임 체크 후 데미지 1번만 적용
     if (m_attackCooldownTimer <= 0.0f)
     {
-        target->_hp -= m_attack;
-        m_attackCooldownTimer = m_attackCooldown;
+        int finalDamage = target->_isBlocking ? 0 : m_attack;
+        target->_hp -= finalDamage;
+        m_attackCooldownTimer = m_attackCooldown;  // 3.0f 리셋
 
-        std::cout << "[몬스터] ID=" << m_id << " → 플레이어 ID=" << target->_id
-            << " 공격! (데미지=" << m_attack << " 남은HP=" << target->_hp << ")\n";
-
+        CheckAndHandleDeath(target);
         target->send_player_info_packet();
+
+        cout << "[몬스터공격] 대상ID=" << target->_id << " isBlocking=" << target->_isBlocking << " damage=" << finalDamage << " remainHP=" << target->_hp << "\n";
     }
+
+    BroadcastMove(users);
 }
 
 void Monster::UpdateReturn(float dt, const std::unordered_map<long long, SESSION*>& users)
@@ -163,7 +290,6 @@ void Monster::UpdateReturn(float dt, const std::unordered_map<long long, SESSION
     m_look = dir;
     m_position.x += dir.x * m_moveSpeed * dt;
     m_position.z += dir.z * m_moveSpeed * dt;
-
     BroadcastMove(users);
 
 }
@@ -187,6 +313,11 @@ void Monster::TakeDamage(int damage, long long attackerID, std::unordered_map<lo
 }
 
 
+
+// ================================================================
+// 유틸 함수
+// ================================================================
+
 float Monster::Distance(const XMFLOAT3& a, const XMFLOAT3& b) const
 {
     float dx = a.x - b.x;
@@ -203,8 +334,7 @@ XMFLOAT3 Monster::DirectionTo(const XMFLOAT3& from, const XMFLOAT3& to) const
     return { dx / len, 0.0f, dz / len };
 }
 
-SESSION* Monster::FindClosestPlayerInRange(const std::unordered_map<long long, SESSION*>& users, 
-    float range, float& outDist) const
+SESSION* Monster::FindClosestPlayerInRange(const std::unordered_map<long long, SESSION*>& users, float range, float& outDist) const
 {
     SESSION* closest = nullptr;
     outDist = FLT_MAX;
@@ -221,6 +351,11 @@ SESSION* Monster::FindClosestPlayerInRange(const std::unordered_map<long long, S
     return closest;
 }
 
+
+
+// ================================================================
+// Broadcast
+// ================================================================
 
 void Monster::BroadcastMove(const std::unordered_map<long long, SESSION*>& users)
 {
@@ -280,8 +415,7 @@ void Monster::SendGoldReward(long long killerID, const std::unordered_map<long l
 
     killer->do_send(&pkt);
 
-    cout << "[골드] ID=" << killerID << " +" << m_goldDrop << "G"
-        << " (현재=" << killer->_gold << "G)\n";
+    cout << "[골드] ID=" << killerID << " +" << m_goldDrop << "G" << " (현재=" << killer->_gold << "G)\n";
 }
 
 
@@ -300,7 +434,6 @@ void MonsterManager::SpawnMonsters(int count)
 {
     lock_guard<std::mutex> lock(m_mutex);
 
-    // SPAWN_POSITIONS 배열 범위 초과 방지
     int spawnCount = (std::min)(count, (int)SPAWN_POSITIONS.size());
 
     for (int i = 0; i < spawnCount; ++i)
@@ -322,8 +455,7 @@ void MonsterManager::Update(float dt, const std::unordered_map<long long, SESSIO
     }
 }
 
-void MonsterManager::OnMonsterHit(long long monsterID, int damage, long long attackerID,
-    std::unordered_map<long long, SESSION*>& users)
+void MonsterManager::OnMonsterHit(long long monsterID, int damage, long long attackerID, std::unordered_map<long long, SESSION*>& users)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     auto it = m_monsters.find(monsterID);
