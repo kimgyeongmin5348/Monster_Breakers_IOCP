@@ -12,7 +12,38 @@ static const std::vector<XMFLOAT3> SPAWN_POSITIONS = {
 
 };
 
+// ================================================================
+// 비정형 사각형 범위 내 랜덤 좌표 생성
+// 이중 삼각형 보간(bilinear) 방식
+// ================================================================
 
+static XMFLOAT3 RandomPointInQuad(const XMFLOAT3& A, const XMFLOAT3& B, const XMFLOAT3& C, const XMFLOAT3& D, float y)
+{
+    static std::mt19937 rng(std::random_device{}());
+    static std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+
+    float s = dist(rng);  // 0~1
+    float t = dist(rng);  // 0~1
+
+    float x = (1 - s) * (1 - t) * A.x + s * (1 - t) * B.x + s * t * C.x + (1 - s) * t * D.x;
+    float z = (1 - s) * (1 - t) * A.z + s * (1 - t) * B.z + s * t * C.z + (1 - s) * t * D.z;
+
+    return { x, y, z };
+}
+
+// ================================================================
+// 새 구역 랜덤 스폰 좌표 생성 함수
+// ================================================================
+static XMFLOAT3 GetRandomSpawnInZone()
+{
+
+    XMFLOAT3 A = { 4.0f, 0.1f, 133.0f };  // 좌하단
+    XMFLOAT3 B = { 3.0f, 0.1f, 119.0f };  // 우하단
+    XMFLOAT3 C = { -17.0f, 0.1f, 119.0f }; // 우상단
+    XMFLOAT3 D = { -19.0f, 0.1f,  82.0f }; // 좌상단
+
+    return RandomPointInQuad(A, B, C, D, 0.1f);
+}
 
 // ================================================================
 // Monster 생성자
@@ -434,15 +465,26 @@ void MonsterManager::SpawnMonsters(int count)
 {
     lock_guard<std::mutex> lock(m_mutex);
 
-    int spawnCount = (std::min)(count, (int)SPAWN_POSITIONS.size());
-
-    for (int i = 0; i < spawnCount; ++i)
+    // 기존 고정 스폰 (3마리)
+    int fixedCount = (std::min)(3, (int)SPAWN_POSITIONS.size());
+    for (int i = 0; i < fixedCount; ++i)
     {
         long long id = m_idCounter++;
         m_monsters[id] = new Monster(id, SPAWN_POSITIONS[i]);
+        cout << "[몬스터매니저] 고정스폰 ID=" << id << " pos=(" << SPAWN_POSITIONS[i].x << ", " << SPAWN_POSITIONS[i].z << ")\n";
     }
 
-    cout << "[몬스터 매니저] " << spawnCount << "마리 스폰 완료\n";
+    // 나머지는 새 구역 랜덤 스폰
+    int randomCount = count - fixedCount;
+    for (int i = 0; i < randomCount; ++i)
+    {
+        XMFLOAT3 pos = GetRandomSpawnInZone();
+        long long id = m_idCounter++;
+        m_monsters[id] = new Monster(id, pos);
+        cout << "[몬스터매니저] 랜덤스폰 ID=" << id << " pos=(" << pos.x << ", " << pos.z << ")\n";
+    }
+
+    cout << "[몬스터매니저] 총 " << count << "마리 스폰 완료 " << "(고정=" << fixedCount << " 랜덤=" << randomCount << ")\n";
 }
 
 void MonsterManager::Update(float dt, const std::unordered_map<long long, SESSION*>& users)
