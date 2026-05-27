@@ -37,12 +37,21 @@ static XMFLOAT3 RandomPointInQuad(const XMFLOAT3& A, const XMFLOAT3& B, const XM
 static XMFLOAT3 GetRandomSpawnInZone()
 {
 
-    XMFLOAT3 A = { 4.0f, 0.1f, 133.0f };  // 좌하단
-    XMFLOAT3 B = { 3.0f, 0.1f, 119.0f };  // 우하단
-    XMFLOAT3 C = { -17.0f, 0.1f, 119.0f }; // 우상단
-    XMFLOAT3 D = { -19.0f, 0.1f,  82.0f }; // 좌상단
+    XMFLOAT3 Z1A = { 20.0f, 0.1f, 78.0f };  // 좌하단
+    XMFLOAT3 Z1B = { 6.0f, 0.1f, 140.0f };  // 우하단
+    XMFLOAT3 Z1C = { -29.0f, 0.1f, 108.0f }; // 우상단
+    XMFLOAT3 Z1D = { -24.0f, 0.1f,  80.0f }; // 좌상단
 
-    return RandomPointInQuad(A, B, C, D, 0.1f);
+    return RandomPointInQuad(Z1A, Z1B, Z1C, Z1D, 0.1f);
+}
+
+static XMFLOAT3 GetRandomSpawnZone2()
+{
+    XMFLOAT3 Z2A = { 49.0f, 7.1f, 134.0f };  // 좌하단
+    XMFLOAT3 Z2B = { 48.0f, 7.1f, 109.0f };  // 우하단
+    XMFLOAT3 Z2C = { 68.0f, 7.1f, 109.0f };  // 우상단
+    XMFLOAT3 Z2D = { 67.0f, 7.1f, 136.0f };  // 좌상단
+    return RandomPointInQuad(Z2A, Z2B, Z2C, Z2D, 0.1f);
 }
 
 // ================================================================
@@ -461,9 +470,80 @@ MonsterManager::~MonsterManager()
     m_monsters.clear();
 }
 
+static float CalcQuadArea(const XMFLOAT3& A, const XMFLOAT3& B,
+    const XMFLOAT3& C, const XMFLOAT3& D)
+{
+    // 삼각형 ABC 면적
+    float area1 = abs((B.x - A.x) * (C.z - A.z) - (C.x - A.x) * (B.z - A.z)) * 0.5f;
+    // 삼각형 ACD 면적
+    float area2 = abs((C.x - A.x) * (D.z - A.z) - (D.x - A.x) * (C.z - A.z)) * 0.5f;
+    return area1 + area2;
+}
+
+// 구역 면적 기준으로 최대 수용 가능 마릿수 검증
+// 몬스터 1마리당 minDist 반지름 원 면적 기준
+static bool ValidateSpawnCount(const char* zoneName, float area,
+    int requestCount, float minDist)
+{
+    // 원의 면적 = π * r^2, r = minDist / 2
+    float monsterArea = 3.14159f * (minDist / 2.0f) * (minDist / 2.0f);
+    // 육각형 패킹 효율 약 0.9069 적용 (가장 조밀하게 채울 수 있는 비율)
+    int maxCount = (int)(area * 0.9069f / monsterArea);
+
+    if (requestCount > maxCount)
+    {
+        cout << "[경고] " << zoneName << " 생성 요구수(" << requestCount << "마리)가 너무 많습니다! " << "면적 기준 최대 수용 가능: " << maxCount << "마리 " << "(최소간격 " << minDist << " 기준)\n";
+        return false;
+    }
+    return true;
+}
+
+static bool IsFarEnough(const XMFLOAT3& candidate,
+    const std::vector<XMFLOAT3>& placed, float minDist)
+{
+    for (const auto& p : placed)
+    {
+        float dx = candidate.x - p.x;
+        float dz = candidate.z - p.z;
+        if (sqrtf(dx * dx + dz * dz) < minDist)
+            return false;
+    }
+    return true;
+}
+
 void MonsterManager::SpawnMonsters(int count)
 {
     lock_guard<std::mutex> lock(m_mutex);
+
+    std::vector<XMFLOAT3> placed;
+    const float MIN_DIST = 6.0f;
+    const int   MAX_RETRY = 100;
+
+    int zone1Count = 24;
+    int zone2Count = 0;
+
+
+    XMFLOAT3 Z1A = { 20.0f, 0.1f, 78.0f };
+    XMFLOAT3 Z1B = { 6.0f, 0.1f, 140.0f };
+    XMFLOAT3 Z1C = { -29.0f, 0.1f, 108.0f };
+    XMFLOAT3 Z1D = { -24.0f, 0.1f,  80.0f };
+
+    XMFLOAT3 Z2A = { 49.0f, 7.1f, 134.0f }; 
+    XMFLOAT3 Z2B = { 48.0f, 7.1f, 109.0f }; 
+    XMFLOAT3 Z2C = { 68.0f, 7.1f, 109.0f };
+    XMFLOAT3 Z2D = { 67.0f, 7.1f, 136.0f }; 
+
+    float area1 = CalcQuadArea(Z1A, Z1B, Z1C, Z1D);
+    float area2 = CalcQuadArea(Z2A, Z2B, Z2C, Z2D);
+
+    bool zone1OK = ValidateSpawnCount("구역2", area1, zone1Count, MIN_DIST);
+    bool zone2OK = ValidateSpawnCount("구역3", area2, zone2Count, MIN_DIST);
+
+    if (!zone1OK || !zone2OK)
+    {
+        cout << "[서버] 스폰 중단 - 생성 요구수를 줄이거나 구역을 넓혀주세요.\n";
+        return;  // 스폰 중단 (그냥 경고만 하고 진행하려면 return 제거)
+    }
 
     // 기존 고정 스폰 (3마리)
     int fixedCount = (std::min)(3, (int)SPAWN_POSITIONS.size());
@@ -471,20 +551,38 @@ void MonsterManager::SpawnMonsters(int count)
     {
         long long id = m_idCounter++;
         m_monsters[id] = new Monster(id, SPAWN_POSITIONS[i]);
+        placed.push_back(SPAWN_POSITIONS[i]);
         cout << "[몬스터매니저] 고정스폰 ID=" << id << " pos=(" << SPAWN_POSITIONS[i].x << ", " << SPAWN_POSITIONS[i].z << ")\n";
     }
 
-    // 나머지는 새 구역 랜덤 스폰
-    int randomCount = count - fixedCount;
-    for (int i = 0; i < randomCount; ++i)
+    for (int i = 0; i < zone1Count; ++i)
     {
         XMFLOAT3 pos = GetRandomSpawnInZone();
+        for (int attempt = 0; attempt < MAX_RETRY; ++attempt)
+        {
+            if (IsFarEnough(pos, placed, MIN_DIST)) break;
+            pos = GetRandomSpawnInZone();
+        }
         long long id = m_idCounter++;
         m_monsters[id] = new Monster(id, pos);
-        cout << "[몬스터매니저] 랜덤스폰 ID=" << id << " pos=(" << pos.x << ", " << pos.z << ")\n";
+        placed.push_back(pos);
     }
 
-    cout << "[몬스터매니저] 총 " << count << "마리 스폰 완료 " << "(고정=" << fixedCount << " 랜덤=" << randomCount << ")\n";
+    for (int i = 0; i < zone2Count; ++i)
+    {
+        XMFLOAT3 pos = GetRandomSpawnZone2();
+        for (int attempt = 0; attempt < MAX_RETRY; ++attempt)
+        {
+            if (IsFarEnough(pos, placed, MIN_DIST)) break;
+            pos = GetRandomSpawnZone2();
+        }
+        long long id = m_idCounter++;
+        m_monsters[id] = new Monster(id, pos);
+        placed.push_back(pos);
+    }
+
+    int total = fixedCount + zone1Count + zone2Count;
+    cout << "[몬스터매니저] 총 " << m_monsters.size() << "마리 스폰 완료 (최소간격 " << MIN_DIST << ")\n";
 }
 
 void MonsterManager::Update(float dt, const std::unordered_map<long long, SESSION*>& users)

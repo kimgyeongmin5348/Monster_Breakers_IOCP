@@ -2,7 +2,7 @@
 #include "common.h"
 #include "protocol.h"
 
-static const int   MONSTER_SPAWN_COUNT = 20; // 서버 시작 시 스폰할 몬스터 수
+static const int   MONSTER_SPAWN_COUNT = 27; // 서버 시작 시 스폰할 몬스터 수
 
 enum class MonsterAIState {
     IDLE,
