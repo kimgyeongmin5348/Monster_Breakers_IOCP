@@ -68,6 +68,9 @@ SESSION::SESSION(long long session_id, SOCKET s) : _id(session_id), _c_socket(s)
 }
 
 void SESSION::do_recv() {
+
+	if (_c_socket == INVALID_SOCKET) return;
+
 	DWORD recv_flag = 0;
 	ZeroMemory(&_recv_over._over, sizeof(_recv_over._over));
 	_recv_over._wsabuf[0].buf = reinterpret_cast<CHAR*>(_recv_over._buffer + _remained);
@@ -85,18 +88,26 @@ void SESSION::do_recv() {
 }
 
 void SESSION::do_send(void* buff) {
-	if (_c_socket == INVALID_SOCKET) return;
+
+	SOCKET sock = _c_socket;
+	if (sock == INVALID_SOCKET) return;
 
 	EXP_OVER* over = new EXP_OVER(IO_SEND);
 	unsigned char packet_size = reinterpret_cast<unsigned char*>(buff)[0];
 	memcpy(over->_buffer, buff, packet_size);
 	over->_wsabuf[0].len = packet_size;
 
-	int ret = WSASend(_c_socket, over->_wsabuf, 1, NULL, 0, &over->_over, NULL);
+	// new 이후 재확인 (그 사이에 CloseSession 됐을 수 있음)
+	if (_c_socket == INVALID_SOCKET) {
+		delete over;
+		return;
+	}
+
+	int ret = WSASend(sock, over->_wsabuf, 1, NULL, 0, &over->_over, NULL);
 	if (ret == SOCKET_ERROR) {
 		int error = WSAGetLastError();
 		if (error != WSA_IO_PENDING) {
-			std::cout << "[오류] do_send 실패 ID:" << _id << " 에러:" << error << std::endl;
+			cout << "[오류] do_send 실패 ID:" << _id << " 에러:" << error << endl;
 			delete over;
 		}
 	}
@@ -617,17 +628,21 @@ void CloseSession(long long id)
 	if (s != INVALID_SOCKET)
 		closesocket(s);
 
-	// 다른 클라이언트들에게 퇴장 알림
+	char savedPlayerID[MAX_ID_LENGTH] = {};
+	strncpy_s(savedPlayerID, sizeof(savedPlayerID), pSession->_playerID, _TRUNCATE);
+	long long savedID = pSession->_id;
+
+
 	sc_packet_leave leavePkt{};
 	leavePkt.size = sizeof(leavePkt);
 	leavePkt.type = SC_P_LEAVE;
-	leavePkt.id = id;
-	strncpy_s(leavePkt.playerID, pSession->_playerID, MAX_ID_LENGTH - 1);
-	BroadcastToAll(&leavePkt, id);
+	leavePkt.id = savedID;
+	strncpy_s(leavePkt.playerID, savedPlayerID, MAX_ID_LENGTH - 1);
+	BroadcastToAll(&leavePkt, savedID);
 
-	cout << "[접속종료] playerID=" << pSession->_playerID << " sessionID=" << id << " | 남은 세션: " << g_session.size() << "\n";
+	cout << "[접속종료] playerID=" << savedPlayerID << " sessionID=" << savedID << " | 남은 세션: " << g_session.size() << "\n";
 
-	delete pSession;
+	pSession->_pendingDelete = true;
 }
 
 void print_error_message(int s_err)
@@ -684,10 +699,22 @@ void WorkerThread() {
 
 		if (FALSE == ret || (0 == io_size && (eo->_io_op == IO_RECV || eo->_io_op == IO_SEND))) {
 			if (eo->_io_op == IO_RECV) {
+
+				EXP_OVER* recvOver = eo;
+				SESSION* pSession = reinterpret_cast<SESSION*>(
+					reinterpret_cast<char*>(recvOver)
+					- offsetof(SESSION, _recv_over)
+					);
+
 				long long disconnected_id = static_cast<long long>(key);
-				cout << "[접속종료-상단] sessionID=" << disconnected_id << "\n";
-				CloseSession(disconnected_id);
-				delete eo;	
+				cout << "[접속종료-IOCP] sessionID=" << disconnected_id << "\n";
+
+				if (!pSession->_pendingDelete)
+				{
+					// 아직 CloseSession 안 불린 경우 (클라이언트 강제종료)
+					CloseSession(disconnected_id);
+				}
+				delete pSession;
 			}
 			else {
 				delete eo;
@@ -753,18 +780,17 @@ void WorkerThread() {
 				auto it = g_session.find(key);
 				if (it == g_session.end()) {
 					// 세션이 이미 제거된 경우
-					delete eo;  // EXP_OVER 객체 정리
+					//delete eo;  // EXP_OVER 객체 정리
 					continue;
 				}
 				pUser = it->second;  // 포인터 추출
 			}
 
-			if (FALSE == ret || 0 == io_size) {
+			/*if (FALSE == ret || 0 == io_size) {
 				cout << "[접속종료-내부] sessionID=" << key << "\n";
-				CloseSession(static_cast<long long>(key));
 				delete eo;
 				continue;
-			}
+			}*/
 
 			// 2. 세션 작업 (락이 해제된 상태에서 진행)
 			SESSION& user = *pUser;  // 역참조

@@ -23,13 +23,11 @@ public:
 		_wsabuf[0].len = sizeof(_buffer);
 	}
 
-
 	WSAOVERLAPPED		_over;
 	IO_OP				_io_op;
 	SOCKET				_accept_socket;
 	unsigned char		_buffer[1024];
 	WSABUF				_wsabuf[1];
-
 
 };
 
@@ -62,14 +60,21 @@ public:
 	float				_respawnTimer = 0.0f;
 	XMFLOAT3			_spawnPos = { 0.0f, 0.0f, 0.0f };
 
+	bool				_pendingDelete = false;
+
 public:
 	SESSION() = delete;
 
 	SESSION(long long session_id, SOCKET s);
 
-	~SESSION() {
-		closesocket(_c_socket);
-	}
+	~SESSION() = default;
+
+	//~SESSION() {
+	//	if (_c_socket != INVALID_SOCKET) {
+	//		closesocket(_c_socket);
+	//		_c_socket = INVALID_SOCKET;
+	//	}
+	//}
 
 	void do_recv();
 	void do_send(void* buff);
