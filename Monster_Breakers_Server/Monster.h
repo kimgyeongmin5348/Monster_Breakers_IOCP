@@ -8,7 +8,8 @@ enum class MonsterAIState {
     IDLE,
     CHASE,
     ATTACK,
-    RETURN
+    RETURN,
+    DEAD
 };
 
 class SESSION;
@@ -32,6 +33,9 @@ public:
     int         m_goldDrop = 1000;   // 죽으면 드랍하는 골드
     bool        m_isDead = false;
 
+    float       m_respawnTimer = 0.0f;
+    static constexpr float RESPAWN_DELAY = 5.0f;
+
     // -------------------------------------------------------
     // 위치 정보
     // -------------------------------------------------------
@@ -48,7 +52,7 @@ public:
     float       m_attackRange = 2.0f;
     float       m_leaveRange = 5.0f;
     float       m_originalLeaveRange = 5.0f;   // 도발 해제 시 복구용
-    float       m_attackCooldown = 3.0f;   // 공격 쿨타임 3초
+    float       m_attackCooldown = 2.0f;   // 공격 쿨타임 2초
     float       m_attackCooldownTimer = 0.0f;
 
     // -------------------------------------------------------
@@ -76,6 +80,7 @@ public:
     void TakeDamage(int damage, long long attackerID, std::unordered_map<long long, SESSION*>& users);
 
     bool IsDead() const { return m_isDead; }
+    void Respawn(const std::unordered_map<long long, SESSION*>& users);
 
 private:
     // 상태별 처리
@@ -91,6 +96,7 @@ private:
     void BroadcastMove(const std::unordered_map<long long, SESSION*>& users);
     void BroadcastHPUpdate(const std::unordered_map<long long, SESSION*>& users);
     void BroadcastDeath(long long killerID, const std::unordered_map<long long, SESSION*>& users);
+    void BroadcastRespawn(const std::unordered_map<long long, SESSION*>& users);
     void SendGoldReward(long long killerID, const std::unordered_map<long long, SESSION*>& users);
 
     MonsterState ToClientAnimState() const;

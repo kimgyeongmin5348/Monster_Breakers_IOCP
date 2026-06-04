@@ -51,7 +51,7 @@ static XMFLOAT3 GetRandomSpawnZone2()
     XMFLOAT3 Z2B = { 48.0f, 7.1f, 109.0f };  // 우하단
     XMFLOAT3 Z2C = { 68.0f, 7.1f, 109.0f };  // 우상단
     XMFLOAT3 Z2D = { 67.0f, 7.1f, 136.0f };  // 좌상단
-    return RandomPointInQuad(Z2A, Z2B, Z2C, Z2D, 0.1f);
+    return RandomPointInQuad(Z2A, Z2B, Z2C, Z2D, 7.1f);
 }
 
 // ================================================================
@@ -82,7 +82,13 @@ MonsterState Monster::ToClientAnimState() const
 
 void Monster::Update(float dt, const std::unordered_map<long long, SESSION*>& users)
 {
-    if (m_isDead) return;
+    if (m_isDead)
+    {
+        m_respawnTimer -= dt;
+        if (m_respawnTimer <= 0.0f)
+            Respawn(users);
+        return;
+    }
 
     m_attackCooldownTimer -= dt;
 
@@ -156,6 +162,25 @@ void Monster::Update(float dt, const std::unordered_map<long long, SESSION*>& us
     case MonsterAIState::ATTACK:  UpdateAttack(dt, users); break;
     case MonsterAIState::RETURN:  UpdateReturn(dt, users); break;
     }
+}
+
+void Monster::Respawn(const std::unordered_map<long long, SESSION*>& users)
+{
+    m_hp = m_maxHp;
+    m_isDead = false;
+    m_state = MonsterAIState::IDLE;
+    m_targetPlayerID = -1;
+    m_isTaunted = false;
+    m_tauntTargetID = -1;
+    m_tauntTimer = 0.0f;
+    m_attackCooldownTimer = 0.0f;
+    m_leaveRange = m_originalLeaveRange;
+    m_position = m_spawnPosition;
+    m_look = { 0.0f, 0.0f, 1.0f };
+
+    cout << "[리스폰] 몬스터 ID=" << m_id << " 위치=(" << m_position.x << "," << m_position.y << "," << m_position.z << ")" << " HP=" << m_hp << "\n";
+
+    BroadcastRespawn(users);
 }
 
 void Monster::UpdateIdle(float dt, const std::unordered_map<long long, SESSION*>& users)
@@ -347,6 +372,13 @@ void Monster::TakeDamage(int damage, long long attackerID, std::unordered_map<lo
     {
         m_hp = 0;
         m_isDead = true;
+        m_state = MonsterAIState::DEAD;
+        m_respawnTimer = RESPAWN_DELAY;
+        m_targetPlayerID = -1;
+        m_isTaunted = false;
+
+        cout << "[사망] 몬스터 ID=" << m_id << " 사망. " << RESPAWN_DELAY << "초 후 리스폰\n";
+
         BroadcastDeath(attackerID, users);
         SendGoldReward(attackerID, users);
     }
@@ -438,6 +470,17 @@ void Monster::BroadcastDeath(long long killerID, const std::unordered_map<long l
          session->do_send(&pkt);
 }
 
+void Monster::BroadcastRespawn(const std::unordered_map<long long, SESSION*>& users)
+{
+    sc_packet_monster_spawn pkt{};
+    pkt.size = sizeof(pkt); pkt.type = SC_P_MONSTER_SPAWN;
+    pkt.monsterID = m_id; pkt.position = m_position;
+    pkt.hp = m_hp; pkt.state = static_cast<int>(MonsterState::Idle);
+    for (auto& [id, session] : users) session->do_send(&pkt);
+
+    cout << "[리스폰] 몬스터 ID=" << m_id << " 리스폰 패킷 전송\n";
+}
+
 void Monster::SendGoldReward(long long killerID, const std::unordered_map<long long, SESSION*>& users)
 {
     auto it = users.find(killerID);
@@ -470,8 +513,7 @@ MonsterManager::~MonsterManager()
     m_monsters.clear();
 }
 
-static float CalcQuadArea(const XMFLOAT3& A, const XMFLOAT3& B,
-    const XMFLOAT3& C, const XMFLOAT3& D)
+static float CalcQuadArea(const XMFLOAT3& A, const XMFLOAT3& B, const XMFLOAT3& C, const XMFLOAT3& D)
 {
     // 삼각형 ABC 면적
     float area1 = abs((B.x - A.x) * (C.z - A.z) - (C.x - A.x) * (B.z - A.z)) * 0.5f;
@@ -482,8 +524,7 @@ static float CalcQuadArea(const XMFLOAT3& A, const XMFLOAT3& B,
 
 // 구역 면적 기준으로 최대 수용 가능 마릿수 검증
 // 몬스터 1마리당 minDist 반지름 원 면적 기준
-static bool ValidateSpawnCount(const char* zoneName, float area,
-    int requestCount, float minDist)
+static bool ValidateSpawnCount(const char* zoneName, float area, int requestCount, float minDist)
 {
     // 원의 면적 = π * r^2, r = minDist / 2
     float monsterArea = 3.14159f * (minDist / 2.0f) * (minDist / 2.0f);
@@ -498,8 +539,7 @@ static bool ValidateSpawnCount(const char* zoneName, float area,
     return true;
 }
 
-static bool IsFarEnough(const XMFLOAT3& candidate,
-    const std::vector<XMFLOAT3>& placed, float minDist)
+static bool IsFarEnough(const XMFLOAT3& candidate, const std::vector<XMFLOAT3>& placed, float minDist)
 {
     for (const auto& p : placed)
     {
@@ -519,8 +559,8 @@ void MonsterManager::SpawnMonsters(int count)
     const float MIN_DIST = 6.0f;
     const int   MAX_RETRY = 100;
 
-    int zone1Count = 24;
-    int zone2Count = 0;
+    int zone1Count = 17;
+    int zone2Count = 7;
 
 
     XMFLOAT3 Z1A = { 20.0f, 0.1f, 78.0f };
@@ -589,10 +629,7 @@ void MonsterManager::Update(float dt, const std::unordered_map<long long, SESSIO
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto& [id, monster] : m_monsters)
-    {
-        if (!monster->IsDead())
-            monster->Update(dt, users);
-    }
+        monster->Update(dt, users);
 }
 
 void MonsterManager::OnMonsterHit(long long monsterID, int damage, long long attackerID, std::unordered_map<long long, SESSION*>& users)
