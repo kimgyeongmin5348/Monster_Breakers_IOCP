@@ -86,6 +86,7 @@ void SESSION::do_recv() {
 
 void SESSION::do_send(void* buff) {
 	if (_c_socket == INVALID_SOCKET) return;
+
 	EXP_OVER* over = new EXP_OVER(IO_SEND);
 	unsigned char packet_size = reinterpret_cast<unsigned char*>(buff)[0];
 	memcpy(over->_buffer, buff, packet_size);
@@ -148,14 +149,18 @@ void SESSION::process_packet(unsigned char* p)
 	case CS_P_LOGIN:
 	{
 		cs_packet_login* packet = reinterpret_cast<cs_packet_login*>(p);
-		_name = packet->name;
+
+		strncpy_s(_playerID, packet->name, MAX_ID_LENGTH - 1);
+		_playerID[MAX_ID_LENGTH - 1] = '\0';
+
+		//_name = packet->name;
 		_job = packet->job;
 
 		if (_job >= JOB_MAX) {
 			cout << "[오류] 잘못된 작업 선택" << endl;
 		}
 
-		cout << "[서버] " << _id << "번 클라이언트 로그인: " << _name << "(직업 :" << GetJobName(_job) << ")" << endl;
+		cout << "[서버] " << _id << "번 클라이언트 로그인: " << _playerID << "(직업 :" << GetJobName(_job) << ")" << endl;
 
 		switch (_job) {
 		case JOB_WARRIOR: _spawnPos = { 3.0f, 0.0f,  20.0f }; break;
@@ -185,6 +190,7 @@ void SESSION::process_packet(unsigned char* p)
 				pkt.animState = ex_session->GetAnimationState();
 				pkt.hp = ex_session->_hp;
 				pkt.job = ex_session->_job;
+				strncpy_s(pkt.playerID, ex_session->_playerID, MAX_ID_LENGTH - 1);
 				existing_sessions.push_back(pkt);
 			}
 		}
@@ -204,6 +210,7 @@ void SESSION::process_packet(unsigned char* p)
 		new_user_pkt.animState = _animState;
 		new_user_pkt.hp = _hp;
 		new_user_pkt.job = _job;
+		strncpy_s(new_user_pkt.playerID, _playerID, MAX_ID_LENGTH - 1);
 
 		std::cout << "Sending ENTER pkt ID: " << new_user_pkt.id << " size: "
 			<< static_cast<int>(new_user_pkt.size) << std::endl;
@@ -573,6 +580,8 @@ void CheckAndHandleDeath(SESSION* target)
 
 }
 
+
+
 void BroadcastToAll(void* pkt, long long exclude_id = -1) {
 	unsigned char packet_size = reinterpret_cast<unsigned char*>(pkt)[0];
 	std::vector<SESSION*> sessions;
@@ -589,6 +598,37 @@ void BroadcastToAll(void* pkt, long long exclude_id = -1) {
 	}
 }
 
+void CloseSession(long long id)
+{
+	SESSION* pSession = nullptr;
+
+	{
+		std::lock_guard<std::mutex> lock(g_session_mutex);
+		auto it = g_session.find(id);
+		if (it == g_session.end()) return;
+		pSession = it->second;
+		g_session.erase(it);
+	}
+
+	if (!pSession) return;
+
+	SOCKET s = pSession->_c_socket;
+	pSession->_c_socket = INVALID_SOCKET;
+	if (s != INVALID_SOCKET)
+		closesocket(s);
+
+	// 다른 클라이언트들에게 퇴장 알림
+	sc_packet_leave leavePkt{};
+	leavePkt.size = sizeof(leavePkt);
+	leavePkt.type = SC_P_LEAVE;
+	leavePkt.id = id;
+	strncpy_s(leavePkt.playerID, pSession->_playerID, MAX_ID_LENGTH - 1);
+	BroadcastToAll(&leavePkt, id);
+
+	cout << "[접속종료] playerID=" << pSession->_playerID << " sessionID=" << id << " | 남은 세션: " << g_session.size() << "\n";
+
+	delete pSession;
+}
 
 void print_error_message(int s_err)
 {
@@ -600,7 +640,7 @@ void print_error_message(int s_err)
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		(LPTSTR)&lpMsgBuf, 0, NULL);
 	std::wcout << lpMsgBuf << std::endl;
-	while (true); // 디버깅 용
+	//while (true); // 디버깅 용
 	LocalFree(lpMsgBuf);
 }
 
@@ -634,12 +674,24 @@ void WorkerThread() {
 		WSAOVERLAPPED* o;
 		ULONG_PTR key;
 		BOOL ret = GetQueuedCompletionStatus(g_hIOCP, &io_size, &key, &o, INFINITE);
+
+		if (o == nullptr) {
+			cout << "[오류] GQCS o=NULL, key=" << key << "\n";
+			continue;
+		}
+
 		EXP_OVER* eo = reinterpret_cast<EXP_OVER*>(o);
 
 		if (FALSE == ret || (0 == io_size && (eo->_io_op == IO_RECV || eo->_io_op == IO_SEND))) {
 			if (eo->_io_op == IO_RECV) {
+				long long disconnected_id = static_cast<long long>(key);
+				cout << "[접속종료-상단] sessionID=" << disconnected_id << "\n";
+				CloseSession(disconnected_id);
+				delete eo;	
 			}
-			delete eo;
+			else {
+				delete eo;
+			}
 			continue;
 		}
 
@@ -687,8 +739,10 @@ void WorkerThread() {
 		}
 
 		case IO_SEND:
+		{
 			delete eo;
 			break;
+		}
 
 		case IO_RECV:
 		{
@@ -706,8 +760,9 @@ void WorkerThread() {
 			}
 
 			if (FALSE == ret || 0 == io_size) {
-				std::cout << "[서버] " << key << "번 클라이언트 연결 종료\n";
-				delete eo;  // EXP_OVER 객체 정리
+				cout << "[접속종료-내부] sessionID=" << key << "\n";
+				CloseSession(static_cast<long long>(key));
+				delete eo;
 				continue;
 			}
 
@@ -739,6 +794,8 @@ void WorkerThread() {
 			}
 			else
 				user._remained = 0;
+
+			//delete eo;
 			pUser->do_recv();
 			break;
 		}

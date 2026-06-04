@@ -39,6 +39,7 @@ public:
 	SOCKET				_c_socket;
 	long long			_id;
 	long long			_nickname;
+	char				_playerID[MAX_ID_LENGTH];
 
 	EXP_OVER			_recv_over{ IO_RECV };
 	unsigned char		_remained;
@@ -80,6 +81,7 @@ public:
 
 };
 
+void CloseSession(long long id);
 void BroadcastToAll(void* pkt, long long exclude_id);
 void print_error_message(int s_err);
 void do_accept(SOCKET s_socket);

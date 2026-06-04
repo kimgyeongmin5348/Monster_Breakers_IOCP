@@ -134,6 +134,7 @@ struct sc_packet_enter {
 	uint8_t				animState;
 	short				hp;
 	uint8_t				job;
+	char				playerID[MAX_ID_LENGTH];
 
 };
 
@@ -141,8 +142,8 @@ struct sc_packet_leave {
 	unsigned char		size;
 	char				type;
 	long long			id;
+	char				playerID[MAX_ID_LENGTH];
 };
-
 
 struct cs_packet_login {
 	unsigned char		size;
