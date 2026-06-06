@@ -40,9 +40,7 @@ public:
 class SESSION {
 public:
 	int					_level = 1;
-	int					_skillQPower = 0;   
-	int					_skillEBonus = 0;  
-	float				_skillRCooldownReduce = 0.0f;
+	int					_skillLevel[3] = { 0, 0, 0 };
 
 	SOCKET				_c_socket;
 	long long			_id;

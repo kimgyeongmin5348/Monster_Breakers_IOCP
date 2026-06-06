@@ -310,9 +310,6 @@ void SESSION::process_packet(unsigned char* p)
 		}
 
 		_gold -= cost;
-		_level++;
-
-		cout << "[레벨업] ID=" << _id << " Lv=" << _level << "\n";
 
 		// 골드 차감 동기화
 		sc_packet_gold_reward syncPkt{};
@@ -323,6 +320,87 @@ void SESSION::process_packet(unsigned char* p)
 		syncPkt.totalGold = _gold;
 		do_send(&syncPkt);
 
+		break;
+	}
+
+	case CS_P_SKILL_UPGRADE:
+	{
+		cs_packet_skill_upgrade* packet = reinterpret_cast<cs_packet_skill_upgrade*>(p);
+		int slotIdx = (int)packet->slot;
+
+		if (slotIdx < 0 || slotIdx > 2) {
+			cout << "[스킬업] ID=" << _id << " 잘못된 슬롯=" << slotIdx << "\n";
+			break;
+		}
+
+		_skillLevel[slotIdx]++;
+		_level++;
+		int lv = _skillLevel[slotIdx];
+
+		int newValue = 0;
+
+		// 직업별로 슬롯 의미가 다름
+		switch (_job)
+		{
+		case JOB_WARRIOR:
+			switch (slotIdx) {
+			case 0:
+				cout << "[스킬업] 방어 구현 아직 안함" << "\n";
+				break;
+			case 1: // Q - 강타: 레벨당 스킬데미지 +5
+				newValue = _damage * 3 + lv * 5;
+				cout << "[스킬업] 기사 강타 Lv=" << lv << " 데미지=" << newValue << "\n";
+				break;
+			case 2: // E - 도발: 레벨당 지속시간 +1초
+				newValue = 5 + lv;
+				cout << "[스킬업] 기사 도발 Lv=" << lv << " 지속시간=" << newValue << "초\n";
+				break;
+			}
+			break;
+
+		case JOB_MAGE:
+			switch (slotIdx) {
+			case 1: // Q - 공격력 버프: 레벨당 버프량 +3
+				newValue = 20 + lv * 3;
+				cout << "[스킬업] 법사 공격력버프 Lv=" << lv << " 버프량=" << newValue << "\n";
+				break;
+			case 2: // E - 힐: 레벨당 힐량 +5
+				newValue = 30 + lv * 5;
+				cout << "[스킬업] 법사 힐 Lv=" << lv << " 힐량=" << newValue << "\n";
+				break;
+			case 0: // R - 파이어볼: 레벨당 스킬데미지 +5
+				newValue = _damage * 4 + lv * 5;
+				cout << "[스킬업] 법사 파이어볼 Lv=" << lv << " 데미지=" << newValue << "\n";
+				break;
+			}
+			break;
+
+		case JOB_THIEF:
+			switch (slotIdx) {
+			case 1: // Q - 공격력 버프: 레벨당 버프량 +3
+
+				cout << "[스킬업] 도적 스킬 미구현" << "\n";
+				break;
+			case 2: // E - 힐: 레벨당 힐량 +5
+
+				cout << "[스킬업] 도적 스킬 미구현" << "\n";	
+				break;
+			case 0: // R - 파이어볼: 레벨당 스킬데미지 +5
+
+				cout << "[스킬업] 도적 스킬 미구현" << "\n";
+				break;
+			}
+			break;
+		}
+
+		sc_packet_skill_upgrade pkt{};
+		pkt.size = sizeof(pkt);
+		pkt.type = SC_P_SKILL_UPGRADE;
+		pkt.playerID = _id;
+		pkt.slot = packet->slot;
+		pkt.level = lv;
+		pkt.newValue = newValue;
+		do_send(&pkt);
 		break;
 	}
 
@@ -338,25 +416,14 @@ void SESSION::process_packet(unsigned char* p)
 		broadcast.size = sizeof(broadcast);
 		broadcast.type = SC_P_SKILL;
 		broadcast.playerID = _id;
-		broadcast.skillType = packet->skillType;
 		broadcast.position = packet->position;
 		broadcast.look = packet->look;
 
 		BroadcastToAll(&broadcast, _id);
 
-		int skillDamage = 0;
-		float hitRange = 0.0f;
+		int   skillDamage = _damage * 4 + _skillLevel[2] * 5;
+		float hitRange = 2.0f;
 
-		switch (packet->skillType)
-		{
-		case SkillType::SKILL_FIREBALL:
-			skillDamage = _damage * 4;   // 법사 파이어볼: 기본 공격력 × 4 (8×4=32, 버프 시 28×4=112)
-			hitRange = 3.0f;          // 반경 3.0f 이내 몬스터에 적용
-			break;
-			// 도적 무기 던지기도 SKILL 패킷 쓰면 여기에 추가
-		default:
-			break;
-		}
 
 		if (skillDamage > 0)
 		{
@@ -411,7 +478,7 @@ void SESSION::process_packet(unsigned char* p)
 		pkt.look = packet->look;
 		BroadcastToAll(&pkt, _id);
 
-		int strikeDamage = _damage * 3;  // 기사 강타: 기본 공격력 × 3 (15×3=45, 버프 시 35×3=105)
+		int strikeDamage = _damage * 3 + _skillLevel[0] * 5;
 		float strikeRange = 4.0f;        // 전방 4.0f 범위
 
 		auto& monsterMap = MonsterManager::GetInstance().GetMonsters();
@@ -441,7 +508,8 @@ void SESSION::process_packet(unsigned char* p)
 	{
 		cs_packet_taunt* packet = reinterpret_cast<cs_packet_taunt*>(p);
 		float tauntRange = packet->range;
-		const float TAUNT_DURATION = 5.0f;
+		const float TAUNT_DURATION = 5.0f + (float)_skillLevel[1];
+
 
 		int affected = 0;
 		auto& monsters = MonsterManager::GetInstance().GetMonsters();
@@ -482,10 +550,13 @@ void SESSION::process_packet(unsigned char* p)
 			cout << "[BUFF_ATK] 혼자 → 자기 자신에게 버프\n";
 		}
 
+		int buffAmount = 20 + _skillLevel[0] * 3;
+		target->_damage += buffAmount;
+
 		if (!target->_isAtkBuffed)
 		{
 			target->_baseDamage = target->_damage;
-			target->_damage += 20;
+			target->_damage += buffAmount;
 			target->_isAtkBuffed = true;
 		}
 		target->_atkBuffTimer = 8.0f;
@@ -506,8 +577,9 @@ void SESSION::process_packet(unsigned char* p)
 	case CS_P_BUFF_HP:
 	{
 
-		const short HP_GAIN = 30;
+		const short HP_GAIN = (short)(30 + _skillLevel[1] * 5);
 		const short MAX_HP = 100;
+
 		_hp = min((short)(_hp + HP_GAIN), MAX_HP);
 
 		cout << "[체력버프] ID=" << _id << " newHP=" << _hp << "\n";
@@ -618,7 +690,7 @@ void SESSION::process_packet(unsigned char* p)
 			break;
 		}
 
-		std::cout << "[서버] 거리 검증 통과 (거리=" << dist << ")" << " → 몬스터 ID=" << packet->monsterID << " 데미지=" << packet->damage << " 처리\n";
+		cout << "[서버] 거리 검증 통과 (거리=" << dist << ")" << " → 몬스터 ID=" << packet->monsterID << " 데미지=" << packet->damage << " 처리\n";
 
 		// 5. 세션 스냅샷 복사 후 데미지 처리
 		std::unordered_map<long long, SESSION*> snapshot;
