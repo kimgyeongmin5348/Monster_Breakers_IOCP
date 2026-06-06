@@ -167,6 +167,15 @@ void SESSION::process_packet(unsigned char* p)
 		//_name = packet->name;
 		_job = packet->job;
 
+		switch (_job)
+		{
+		case JOB_WARRIOR: _damage = BASE_DAMAGE_WARRIOR; break; // 15
+		case JOB_MAGE:    _damage = BASE_DAMAGE_MAGE;    break; // 8
+		case JOB_THIEF:   _damage = BASE_DAMAGE_THIEF;   break; // 12
+		default:          _damage = 10;                  break;
+		}
+		_baseDamage = _damage;
+
 		if (_job >= JOB_MAX) {
 			cout << "[오류] 잘못된 작업 선택" << endl;
 		}
@@ -257,7 +266,7 @@ void SESSION::process_packet(unsigned char* p)
 		_right = packet->right;
 		_animState = packet->animState;  //애니메이션 완료되면 하기
 
-		cout << "[위치] ID=" << _id<< " pos=(" << _position.x << ", "	<< _position.y << ", "	<< _position.z << ")\n";
+		//cout << "[위치] ID=" << _id<< " pos=(" << _position.x << ", "	<< _position.y << ", "	<< _position.z << ")\n";
 
 		sc_packet_move mp;
 		mp.size = sizeof(mp);
@@ -289,11 +298,7 @@ void SESSION::process_packet(unsigned char* p)
 		cs_packet_use_gold* packet = reinterpret_cast<cs_packet_use_gold*>(p);
 		int cost = packet->amount;
 
-
 		if (_gold < cost) {
-			cout << "[GOLD] ID=" << _id << " 골드 부족 (보유=" << _gold << " 필요=" << cost << ") → 거부\n";
-
-
 			sc_packet_gold_reward revertPkt{};
 			revertPkt.size = sizeof(revertPkt);
 			revertPkt.type = SC_P_GOLD_REWARD;
@@ -305,10 +310,11 @@ void SESSION::process_packet(unsigned char* p)
 		}
 
 		_gold -= cost;
+		_level++;
 
-		cout << "[GOLD] ID=" << _id << " 골드 사용 -" << cost << "G (남은=" << _gold << "G)\n";
+		cout << "[레벨업] ID=" << _id << " Lv=" << _level << "\n";
 
-
+		// 골드 차감 동기화
 		sc_packet_gold_reward syncPkt{};
 		syncPkt.size = sizeof(syncPkt);
 		syncPkt.type = SC_P_GOLD_REWARD;
@@ -316,6 +322,7 @@ void SESSION::process_packet(unsigned char* p)
 		syncPkt.amount = -cost;
 		syncPkt.totalGold = _gold;
 		do_send(&syncPkt);
+
 		break;
 	}
 
@@ -323,9 +330,9 @@ void SESSION::process_packet(unsigned char* p)
 	{
 		cs_packet_skill* packet = reinterpret_cast<cs_packet_skill*>(p);
 
-		std::cout << "[SERVER][SKILL] CS_P_SKILL 수신 | from ID=" << _id
-			<< " skillType=" << (int)packet->skillType
-			<< " pos=(" << packet->position.x << ", " << packet->position.y << ", " << packet->position.z << ")\n";
+		//cout << "[SERVER][SKILL] CS_P_SKILL 수신 | from ID=" << _id
+		//	<< " skillType=" << (int)packet->skillType
+		//	<< " pos=(" << packet->position.x << ", " << packet->position.y << ", " << packet->position.z << ")\n";
 
 		sc_packet_skill broadcast{};
 		broadcast.size = sizeof(broadcast);
@@ -335,7 +342,42 @@ void SESSION::process_packet(unsigned char* p)
 		broadcast.position = packet->position;
 		broadcast.look = packet->look;
 
-		BroadcastToAll(&broadcast, _id); // 본인 제외 전송
+		BroadcastToAll(&broadcast, _id);
+
+		int skillDamage = 0;
+		float hitRange = 0.0f;
+
+		switch (packet->skillType)
+		{
+		case SkillType::SKILL_FIREBALL:
+			skillDamage = _damage * 4;   // 법사 파이어볼: 기본 공격력 × 4 (8×4=32, 버프 시 28×4=112)
+			hitRange = 3.0f;          // 반경 3.0f 이내 몬스터에 적용
+			break;
+			// 도적 무기 던지기도 SKILL 패킷 쓰면 여기에 추가
+		default:
+			break;
+		}
+
+		if (skillDamage > 0)
+		{
+			auto& monsterMap = MonsterManager::GetInstance().GetMonsters();
+			for (auto& [monID, mon] : monsterMap)
+			{
+				if (mon->IsDead()) continue;
+
+				float dx = mon->m_position.x - packet->position.x;
+				float dz = mon->m_position.z - packet->position.z;
+				float dist = sqrtf(dx * dx + dz * dz);
+
+				// 발사 방향으로 일정 거리 내 판정 (간이 레이캐스트)
+				// 파이어볼 경로 상 20.0f 범위, 반경 hitRange 이내
+				if (dist < hitRange)
+				{
+					MonsterManager::GetInstance().OnMonsterHit(monID, skillDamage, _id, g_session);
+					cout << "[SKILL_HIT] ID=" << _id << " 파이어볼 → 몬스터ID=" << monID << " 데미지=" << skillDamage << "\n";
+				}
+			}
+		}
 		break;
 	}
 
@@ -359,7 +401,7 @@ void SESSION::process_packet(unsigned char* p)
 	{
 		cs_packet_skill_strike* packet = reinterpret_cast<cs_packet_skill_strike*>(p);
 
-		cout << "[강타] ID=" << _id << " pos=(" << packet->position.x << "," << packet->position.y << "," << packet->position.z << ")\n";
+		//cout << "[강타] ID=" << _id << " pos=(" << packet->position.x << "," << packet->position.y << "," << packet->position.z << ")\n";
 
 		sc_packet_skill_strike pkt{};
 		pkt.size = sizeof(pkt);
@@ -368,6 +410,30 @@ void SESSION::process_packet(unsigned char* p)
 		pkt.position = packet->position;
 		pkt.look = packet->look;
 		BroadcastToAll(&pkt, _id);
+
+		int strikeDamage = _damage * 3;  // 기사 강타: 기본 공격력 × 3 (15×3=45, 버프 시 35×3=105)
+		float strikeRange = 4.0f;        // 전방 4.0f 범위
+
+		auto& monsterMap = MonsterManager::GetInstance().GetMonsters();
+		for (auto& [monID, mon] : monsterMap)
+		{
+			if (mon->IsDead()) continue;
+
+			float dx = mon->m_position.x - packet->position.x;
+			float dz = mon->m_position.z - packet->position.z;
+			float dist = sqrtf(dx * dx + dz * dz);
+
+			if (dist > strikeRange) continue;
+
+			// 전방 방향과의 각도 체크 (전방 120도 부채꼴)
+			float dot = dx * packet->look.x + dz * packet->look.z;
+			if (dot < 0.0f) continue; // 뒤쪽은 제외
+
+			MonsterManager::GetInstance().OnMonsterHit(monID, strikeDamage, _id, g_session);
+
+			cout << "[STRIKE_HIT] 기사ID=" << _id	<< " → 몬스터ID=" << monID	<< " 데미지=" << strikeDamage << "\n";
+		}
+
 		break;
 	}
 
@@ -416,7 +482,13 @@ void SESSION::process_packet(unsigned char* p)
 			cout << "[BUFF_ATK] 혼자 → 자기 자신에게 버프\n";
 		}
 
-		target->_damage += 20;
+		if (!target->_isAtkBuffed)
+		{
+			target->_baseDamage = target->_damage;
+			target->_damage += 20;
+			target->_isAtkBuffed = true;
+		}
+		target->_atkBuffTimer = 8.0f;
 
 		cout << "[BUFF_ATK] 시전자ID=" << _id << " → 대상ID=" << target->_id << " newDamage=" << target->_damage << "\n";
 
@@ -425,7 +497,8 @@ void SESSION::process_packet(unsigned char* p)
 		pkt.size = sizeof(pkt);
 		pkt.type = SC_P_BUFF_ATK;
 		pkt.playerID = _id;
-		pkt.newDamage = _damage;
+		pkt.targetID = target->_id;
+		pkt.newDamage = target->_damage;
 		BroadcastToAll(&pkt, -1);
 		break;
 	}
@@ -526,22 +599,26 @@ void SESSION::process_packet(unsigned char* p)
 		}
 
 		// 4. 서버에서 거리 검증 (근접 공격 유효 범위)
-		const float MELEE_RANGE = 2.5f;
+		float MELEE_RANGE;
+		switch (_job)
+		{
+		case JOB_WARRIOR: MELEE_RANGE = 2.0f; break;  // 기사
+		case JOB_MAGE:    MELEE_RANGE = 5.0f; break;  // 법사
+		case JOB_THIEF:   MELEE_RANGE = 1.5f; break;  // 도적
+		default:          MELEE_RANGE = 2.5f; break;
+		}
+
 		float dx = _position.x - pMonster->m_position.x;
 		float dz = _position.z - pMonster->m_position.z;
 		float dist = sqrtf(dx * dx + dz * dz);
 
 		if (dist > MELEE_RANGE)
 		{
-			std::cout << "[경고] ID=" << _id
-				<< " 범위 초과 공격 무시 (거리=" << dist
-				<< " > " << MELEE_RANGE << ")\n";
+			std::cout << "[경고] ID=" << _id << " 범위 초과 공격 무시 (거리=" << dist << " > " << MELEE_RANGE << ")\n";
 			break;
 		}
 
-		std::cout << "[서버] 거리 검증 통과 (거리=" << dist << ")"
-			<< " → 몬스터 ID=" << packet->monsterID
-			<< " 데미지=" << packet->damage << " 처리\n";
+		std::cout << "[서버] 거리 검증 통과 (거리=" << dist << ")" << " → 몬스터 ID=" << packet->monsterID << " 데미지=" << packet->damage << " 처리\n";
 
 		// 5. 세션 스냅샷 복사 후 데미지 처리
 		std::unordered_map<long long, SESSION*> snapshot;
@@ -550,12 +627,7 @@ void SESSION::process_packet(unsigned char* p)
 			snapshot = g_session;
 		}
 
-		MonsterManager::GetInstance().OnMonsterHit(
-			packet->monsterID,
-			packet->damage,
-			_id,        // 공격한 플레이어 ID (골드 지급용)
-			snapshot
-		);
+		MonsterManager::GetInstance().OnMonsterHit(packet->monsterID, packet->damage, _id, snapshot);
 		break;
 	}
 	default:

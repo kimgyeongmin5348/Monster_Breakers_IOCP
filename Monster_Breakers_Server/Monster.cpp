@@ -630,6 +630,29 @@ void MonsterManager::Update(float dt, const std::unordered_map<long long, SESSIO
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto& [id, monster] : m_monsters)
         monster->Update(dt, users);
+
+    for (auto& [id, session] : users)
+    {
+        if (!session->_isAtkBuffed) continue;
+
+        session->_atkBuffTimer -= dt;
+        if (session->_atkBuffTimer <= 0.0f)
+        {
+            session->_damage = session->_baseDamage;
+            session->_isAtkBuffed = false;
+            session->_atkBuffTimer = 0.0f;
+
+            cout << "[BUFF_ATK 만료] ID=" << id << " 공격력 복구=" << session->_damage << "\n";
+
+            sc_packet_buff_atk expirePkt{};
+            expirePkt.size = sizeof(expirePkt);
+            expirePkt.type = SC_P_BUFF_ATK;
+            expirePkt.playerID = id;
+            expirePkt.targetID = id;
+            expirePkt.newDamage = session->_damage;
+            BroadcastToAll(&expirePkt, -1);
+        }
+    }
 }
 
 void MonsterManager::OnMonsterHit(long long monsterID, int damage, long long attackerID, std::unordered_map<long long, SESSION*>& users)

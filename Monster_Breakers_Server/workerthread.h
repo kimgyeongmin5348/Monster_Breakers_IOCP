@@ -13,6 +13,11 @@ extern SOCKET g_listen_socket;
 
 enum IO_OP { IO_RECV, IO_SEND, IO_ACCEPT };
 
+// 직업별 기본 공격력 조정 및 버프시간 조정
+constexpr int BASE_DAMAGE_WARRIOR = 15;
+constexpr int BASE_DAMAGE_MAGE = 8;    
+constexpr int BASE_DAMAGE_THIEF = 12;
+constexpr float ATK_BUFF_DURATION = 8.0f;
 
 class EXP_OVER
 {
@@ -34,6 +39,11 @@ public:
 
 class SESSION {
 public:
+	int					_level = 1;
+	int					_skillQPower = 0;   
+	int					_skillEBonus = 0;  
+	float				_skillRCooldownReduce = 0.0f;
+
 	SOCKET				_c_socket;
 	long long			_id;
 	long long			_nickname;
@@ -45,6 +55,9 @@ public:
 	bool				_isBlocking = false;
 	int					_damage = 10;       // 기본 공격력
 	bool				_isAtkBuffed = false;
+
+	int					_baseDamage = 10;
+	float				_atkBuffTimer = 0.0f;
 
 	XMFLOAT3			_position;
 	XMFLOAT3			_look;
