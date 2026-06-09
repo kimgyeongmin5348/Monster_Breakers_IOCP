@@ -34,7 +34,7 @@ public:
     bool        m_isDead = false;
 
     float       m_respawnTimer = 0.0f;
-    static constexpr float RESPAWN_DELAY = 5.0f;
+    static constexpr float RESPAWN_DELAY = 10.0f;
 
     // -------------------------------------------------------
     // 위치 정보
@@ -69,7 +69,7 @@ public:
     bool        m_isTaunted = false;
     long long   m_tauntTargetID = -1;
     float       m_tauntTimer = 0.0f;
-    float       m_tauntDuration = 5.0f;
+    float       m_tauntDuration = 8.0f;
 
 public:
     Monster(long long id, const XMFLOAT3& spawnPos);
