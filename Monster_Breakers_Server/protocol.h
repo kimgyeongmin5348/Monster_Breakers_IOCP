@@ -61,6 +61,13 @@ constexpr char SC_P_WEAPON_POS = 51;
 constexpr char SC_P_RESPAWN = 60;
 constexpr char CS_P_USE_GOLD = 61;
 
+
+// 보스 몬스터
+constexpr char SC_P_BOSS_SPAWN = 70;
+constexpr char SC_P_BOSS_HP = 71;
+constexpr char SC_P_BOSS_PATTERN = 72;  // 패턴 + 공격범위 정보
+constexpr char SC_P_BOSS_DEATH = 73;
+
 // =================== 주의!! ========================
 // 
 // 1. 애니메이션 동기화는 클라에서 애니메이션 완료하면 하기
@@ -368,7 +375,42 @@ struct cs_packet_hit_damage {
 	int           damage;
 };
 
-//particle
+// BossMonster
+struct sc_packet_boss_spawn {
+	unsigned char size;
+	char          type;
+	long long     bossID;
+	XMFLOAT3      position;
+	int           hp;
+	int           maxHp;
+};
+
+struct sc_packet_boss_hp {
+	unsigned char size;
+	char          type;
+	long long     bossID;
+	int           hp;
+	int           maxHp;
+};
+
+struct sc_packet_boss_pattern {
+	unsigned char size;
+	char          type;
+	long long     bossID;
+	uint8_t       patternType;
+	XMFLOAT3      attackCenter;
+	float         attackRange;
+	float         sweepAngle;
+};
+
+struct sc_packet_boss_death {
+	unsigned char size;
+	char          type;
+	long long     bossID;
+	long long     killerID;
+};
+
+
 struct cs_packet_particle_impact {
 	unsigned char		size;
 	char				type;

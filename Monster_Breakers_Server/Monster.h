@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h"
+#include "BossMonster.h"
 #include "protocol.h"
 
 static const int   MONSTER_SPAWN_COUNT = 27; // 서버 시작 시 스폰할 몬스터 수
@@ -73,7 +74,7 @@ public:
 
 public:
     Monster(long long id, const XMFLOAT3& spawnPos);
-    ~Monster() = default;
+    virtual ~Monster() = default;
 
     void Update(float dt, const std::unordered_map<long long, SESSION*>& users);
 

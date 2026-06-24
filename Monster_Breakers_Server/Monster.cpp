@@ -54,9 +54,6 @@ static XMFLOAT3 GetRandomSpawnZone2()
     return RandomPointInQuad(Z2A, Z2B, Z2C, Z2D, 7.1f);
 }
 
-// ================================================================
-// Monster 생성자
-// ================================================================
 Monster::Monster(long long id, const XMFLOAT3& spawnPos)
     : m_id(id), m_position(spawnPos), m_spawnPosition(spawnPos)
 {
@@ -522,8 +519,7 @@ static float CalcQuadArea(const XMFLOAT3& A, const XMFLOAT3& B, const XMFLOAT3& 
     return area1 + area2;
 }
 
-// 구역 면적 기준으로 최대 수용 가능 마릿수 검증
-// 몬스터 1마리당 minDist 반지름 원 면적 기준
+
 static bool ValidateSpawnCount(const char* zoneName, float area, int requestCount, float minDist)
 {
     // 원의 면적 = π * r^2, r = minDist / 2

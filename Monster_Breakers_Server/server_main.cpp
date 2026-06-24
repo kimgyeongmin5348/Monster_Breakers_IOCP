@@ -1,5 +1,6 @@
 #include "common.h"
 #include "Monster.h"
+#include "BossMonster.h"
 #include "workerthread.h"
 
 //------------------- Check List --------------------- 
@@ -10,6 +11,7 @@
 // 
 //----------------------------------------------------
 
+BossMonster* g_boss = nullptr;
 
 int main()
 {
@@ -46,6 +48,7 @@ int main()
 	std::cout << "서버 시작" << std::endl;
 	// 몬스터 스폰 (서버 시작 시 1회)
 	MonsterManager::GetInstance().SpawnMonsters(MONSTER_SPAWN_COUNT);
+	g_boss = SpawnBoss();
 
 	// 몬스터 업데이트 스레드 (별도 스레드로 틱 처리)
 	std::thread monsterThread([]() {
@@ -63,6 +66,9 @@ int main()
 			}
 
 			MonsterManager::GetInstance().Update(TICK_RATE, userSnapshot);
+
+			if (g_boss && !g_boss->IsDead())
+				g_boss->Update(TICK_RATE, userSnapshot);
 
 			std::vector<SESSION*> toRespawn;
 			{

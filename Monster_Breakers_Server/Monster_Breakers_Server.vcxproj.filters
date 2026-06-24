@@ -36,6 +36,9 @@
     <ClCompile Include="Monster.cpp">
       <Filter>Contents\Monster</Filter>
     </ClCompile>
+    <ClCompile Include="BossMonster.cpp">
+      <Filter>Contents\BossMonster</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h">
@@ -49,6 +52,9 @@
     </ClInclude>
     <ClInclude Include="Monster.h">
       <Filter>Contents\Monster</Filter>
+    </ClInclude>
+    <ClInclude Include="BossMonster.h">
+      <Filter>Contents\BossMonster</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
