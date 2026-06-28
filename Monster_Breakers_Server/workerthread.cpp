@@ -184,9 +184,9 @@ void SESSION::process_packet(unsigned char* p)
 		cout << "[서버] " << _id << "번 클라이언트 로그인: " << _playerID << "(직업 :" << GetJobName(_job) << ")" << endl;
 
 		switch (_job) {
-		case JOB_WARRIOR: _spawnPos = { 3.0f, 0.0f,  20.0f }; break;
-		case JOB_MAGE:    _spawnPos = { 3.0f, 0.0f,  21.0f }; break;
-		case JOB_THIEF:   _spawnPos = { 3.0f, 0.0f,  22.0f }; break;
+		case JOB_WARRIOR: _spawnPos = { -7.5f, 3.0f,  34.2f }; break;
+		case JOB_MAGE:    _spawnPos = { -9.6f, 3.0f,  31.9f }; break;
+		case JOB_THIEF:   _spawnPos = { -10.5f, 3.0f,  37.2f }; break;
 		default:          _spawnPos = { 0.0f, 0.0f,  0.0f }; break;
 		}
 		_position = _spawnPos;
@@ -457,6 +457,20 @@ void SESSION::process_packet(unsigned char* p)
 					cout << "[SKILL_HIT] ID=" << _id << " 파이어볼 → 몬스터ID=" << monID << " 데미지=" << skillDamage << "\n";
 				}
 			}
+
+			if (g_boss && !g_boss->IsDead())
+			{
+				float dx = g_boss->m_position.x - packet->position.x;
+				float dz = g_boss->m_position.z - packet->position.z;
+				if (sqrtf(dx * dx + dz * dz) < hitRange)
+				{
+					std::unordered_map<long long, SESSION*> snapshot;
+					{ std::lock_guard<std::mutex> lock(g_session_mutex); snapshot = g_session; }
+					g_boss->TakeDamage(skillDamage, _id, snapshot);
+					cout << "[SKILL_HIT] ID=" << _id << " → 보스 타격 damage=" << skillDamage << "\n";
+				}
+			}
+
 		}
 		break;
 	}
@@ -512,6 +526,22 @@ void SESSION::process_packet(unsigned char* p)
 			MonsterManager::GetInstance().OnMonsterHit(monID, strikeDamage, _id, g_session);
 
 			cout << "[STRIKE_HIT] 기사ID=" << _id	<< " → 몬스터ID=" << monID	<< " 데미지=" << strikeDamage << "\n";
+		}
+
+		if (g_boss && !g_boss->IsDead())
+		{
+			float dx = g_boss->m_position.x - packet->position.x;
+			float dz = g_boss->m_position.z - packet->position.z;
+			float dist = sqrtf(dx * dx + dz * dz);
+			float dot = dx * packet->look.x + dz * packet->look.z;
+
+			if (dist <= strikeRange && dot >= 0.0f)
+			{
+				std::unordered_map<long long, SESSION*> snapshot;
+				{ std::lock_guard<std::mutex> lock(g_session_mutex); snapshot = g_session; }
+				g_boss->TakeDamage(strikeDamage, _id, snapshot);
+				cout << "[STRIKE_HIT] ID=" << _id << " → 보스 타격 damage=" << strikeDamage << "\n";
+			}
 		}
 
 		break;
@@ -660,6 +690,40 @@ void SESSION::process_packet(unsigned char* p)
 		pkt.weaponPosition = packet->weaponPosition;
 		pkt.weaponRotation = packet->weaponRotation;
 		BroadcastToAll(&pkt, _id);
+
+		int   weaponDamage = _damage * 2 + _skillLevel[0] * 3;
+		float hitRange = 1.5f;
+
+		if (weaponDamage <= 0) break;
+
+		auto& monsterMap = MonsterManager::GetInstance().GetMonsters();
+		for (auto& [monID, mon] : monsterMap)
+		{
+			if (mon->IsDead()) continue;
+			float dx = mon->m_position.x - packet->weaponPosition.x;
+			float dz = mon->m_position.z - packet->weaponPosition.z;
+			float dist = sqrtf(dx * dx + dz * dz);
+			if (dist <= hitRange)
+			{
+				MonsterManager::GetInstance().OnMonsterHit(monID, weaponDamage, _id, g_session);
+				cout << "[WEAPON_HIT] ID=" << _id << " → 몬스터ID=" << monID << " damage=" << weaponDamage << "\n";
+			}
+		}
+
+		if (g_boss && !g_boss->IsDead())
+		{
+			float dx = g_boss->m_position.x - packet->weaponPosition.x;
+			float dz = g_boss->m_position.z - packet->weaponPosition.z;
+			float dist = sqrtf(dx * dx + dz * dz);
+			if (dist <= hitRange)
+			{
+				std::unordered_map<long long, SESSION*> snapshot;
+				{ std::lock_guard<std::mutex> lock(g_session_mutex); snapshot = g_session; }
+				g_boss->TakeDamage(weaponDamage, _id, snapshot);
+				cout << "[WEAPON_HIT] ID=" << _id << " → 보스 타격 damage=" << weaponDamage << "\n";
+			}
+		}
+
 		break;
 	}
 
@@ -669,32 +733,44 @@ void SESSION::process_packet(unsigned char* p)
 
 		cout << "[서버] ID=" << _id << "번 플레이어 → 몬스터 ID=" << packet->monsterID << " 공격 요청. 데미지=" << packet->damage << "\n";
 
-		// 1. 데미지 값 검증 (비정상 값 방지)
 		if (packet->damage <= 0 || packet->damage > 9999)
 		{
 			cout << "[경고] ID=" << _id << " 비정상 데미지=" << packet->damage << " → 무시\n";
 			break;
 		}
 
-		// 2. 몬스터 존재 여부 확인
+		if (packet->monsterID == BossMonster::BOSS_ID)
+		{
+			if (!g_boss || g_boss->IsDead()) break;
+
+			float MELEE_RANGE;
+			switch (_job) {
+			case JOB_WARRIOR: MELEE_RANGE = 2.0f; break;
+			case JOB_MAGE:    MELEE_RANGE = 5.0f; break;
+			case JOB_THIEF:   MELEE_RANGE = 1.5f; break;
+			default:          MELEE_RANGE = 2.5f; break;
+			}
+
+			float dx = _position.x - g_boss->m_position.x;
+			float dz = _position.z - g_boss->m_position.z;
+			float dist = sqrtf(dx * dx + dz * dz);
+
+			if (dist > MELEE_RANGE) { break; }
+
+			std::unordered_map<long long, SESSION*> snapshot;
+			{ std::lock_guard<std::mutex> lock(g_session_mutex); snapshot = g_session; }
+			g_boss->TakeDamage(packet->damage, _id, snapshot);
+			cout << "[HIT] ID=" << _id << " → 보스 타격 damage=" << packet->damage << "\n";
+			break;
+		}
+
 		auto& monsterMap = MonsterManager::GetInstance().GetMonsters();
 		auto monIt = monsterMap.find(packet->monsterID);
-		if (monIt == monsterMap.end())
-		{
-			cout << "[경고] 존재하지 않는 몬스터 ID=" << packet->monsterID << " → 무시\n";
-			break;
-		}
+		if (monIt == monsterMap.end()) { break; }
 
 		Monster* pMonster = monIt->second;
+		if (pMonster->IsDead()) { break; }
 
-		// 3. 이미 죽은 몬스터면 무시
-		if (pMonster->IsDead())
-		{
-			std::cout << "[경고] 이미 죽은 몬스터 ID=" << packet->monsterID << " → 무시\n";
-			break;
-		}
-
-		// 4. 서버에서 거리 검증 (근접 공격 유효 범위)
 		float MELEE_RANGE;
 		switch (_job)
 		{
@@ -708,15 +784,10 @@ void SESSION::process_packet(unsigned char* p)
 		float dz = _position.z - pMonster->m_position.z;
 		float dist = sqrtf(dx * dx + dz * dz);
 
-		if (dist > MELEE_RANGE)
-		{
-			std::cout << "[경고] ID=" << _id << " 범위 초과 공격 무시 (거리=" << dist << " > " << MELEE_RANGE << ")\n";
-			break;
-		}
+		if (dist > MELEE_RANGE) { break; }
 
 		cout << "[서버] 거리 검증 통과 (거리=" << dist << ")" << " → 몬스터 ID=" << packet->monsterID << " 데미지=" << packet->damage << " 처리\n";
 
-		// 5. 세션 스냅샷 복사 후 데미지 처리
 		std::unordered_map<long long, SESSION*> snapshot;
 		{
 			std::lock_guard<std::mutex> lock(g_session_mutex);

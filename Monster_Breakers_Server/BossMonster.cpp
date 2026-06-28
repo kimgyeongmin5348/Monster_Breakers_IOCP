@@ -141,8 +141,21 @@ void BossMonster::UpdateAI(float dt, const std::unordered_map<long long, SESSION
         return;
     }
 
-    // 공격 범위 안 -> 정지 후 공격 판단
-    BroadcastBossMove(users, false);  // Idle(정지)
+    float targetDirX = dx / len;
+    float targetDirZ = dz / len;
+
+    float dotFacing = m_look.x * targetDirX + m_look.z * targetDirZ;
+
+    m_look = { targetDirX, 0.0f, targetDirZ };
+
+    if (dotFacing < 0.95f)
+    {
+        // 아직 타겟 정면 안 봄 → Walk로 제자리 회전
+        BroadcastBossMove(users, true);
+        return;  // 회전 중엔 공격 판단 안 함
+    }
+
+    BroadcastBossMove(users, false);
 
     m_normalAttackTimer += dt;
     if (m_normalAttackTimer < m_normalAttackCooldown) return;

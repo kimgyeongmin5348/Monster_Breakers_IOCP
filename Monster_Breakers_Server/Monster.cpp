@@ -328,20 +328,46 @@ void Monster::UpdateAttack(float dt, const std::unordered_map<long long, SESSION
         return;
     }
 
-    // 쿨타임 체크 후 데미지 1번만 적용
-    if (m_attackCooldownTimer <= 0.0f)
+    float dx = target->_position.x - m_position.x;
+    float dz = target->_position.z - m_position.z;
+    float len = sqrtf(dx * dx + dz * dz);
+
+    if (len <= 0.001f) { BroadcastMove(users); return; }
+
+    float targetDirX = dx / len;
+    float targetDirZ = dz / len;
+
+    float dotFacing = m_look.x * targetDirX + m_look.z * targetDirZ;
+
+    // 이제 m_look을 타겟 방향으로 갱신
+    m_look = { targetDirX, 0.0f, targetDirZ };
+
+    if (dotFacing < 0.95f)
     {
-        int finalDamage = target->_isBlocking ? 0 : m_attack;
-        target->_hp -= finalDamage;
-        m_attackCooldownTimer = m_attackCooldown;  // 3.0f 리셋
-
-        CheckAndHandleDeath(target);
-        target->send_player_info_packet();
-
-        cout << "[몬스터공격] 대상ID=" << target->_id << " isBlocking=" << target->_isBlocking << " damage=" << finalDamage << " remainHP=" << target->_hp << "\n";
+        sc_packet_monster_move rotPkt{};
+        rotPkt.size = sizeof(rotPkt);
+        rotPkt.type = SC_P_MONSTER_MOVE;
+        rotPkt.monsterID = m_id;              
+        rotPkt.position = m_position;       
+        rotPkt.rotation = m_look;
+        rotPkt.state = static_cast<int>(MonsterState::Walk);
+        for (auto& [sid, session] : users)
+            session->do_send(&rotPkt);
     }
-
-    BroadcastMove(users);
+    else
+    {
+        // 타겟 정면 봄 - 공격 처리 + Attack 패킷
+        if (m_attackCooldownTimer <= 0.0f)
+        {
+            int finalDamage = target->_isBlocking ? 0 : m_attack;
+            target->_hp -= finalDamage;
+            m_attackCooldownTimer = m_attackCooldown;
+            CheckAndHandleDeath(target);
+            target->send_player_info_packet();
+            cout << "[몬스터공격] 타겟ID=" << target->_id << " damage=" << finalDamage << " remainHP=" << target->_hp << "\n";
+        }
+        BroadcastMove(users);  // Attack 상태 패킷
+    }
 }
 
 void Monster::UpdateReturn(float dt, const std::unordered_map<long long, SESSION*>& users)
