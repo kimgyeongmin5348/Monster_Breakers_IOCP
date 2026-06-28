@@ -238,6 +238,7 @@ void SESSION::process_packet(unsigned char* p)
 
 
 		BroadcastToAll(&new_user_pkt, _id);
+		do_send(&new_user_pkt);
 
 		auto& monsters = MonsterManager::GetInstance().GetMonsters();
 		for (auto& [monID, mon] : monsters)

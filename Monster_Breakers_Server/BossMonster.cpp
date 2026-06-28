@@ -150,9 +150,8 @@ void BossMonster::UpdateAI(float dt, const std::unordered_map<long long, SESSION
 
     if (dotFacing < 0.95f)
     {
-        // 아직 타겟 정면 안 봄 → Walk로 제자리 회전
         BroadcastBossMove(users, true);
-        return;  // 회전 중엔 공격 판단 안 함
+        return;
     }
 
     BroadcastBossMove(users, false);
