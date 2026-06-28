@@ -35,27 +35,8 @@ void BossMonster::Update(float dt, const std::unordered_map<long long, SESSION*>
 {
     if (m_isDead) return;
 
-    m_normalAttackTimer += dt;
-    if (m_skillCooldown > 0.0f) m_skillCooldown -= dt;
-
     UpdatePhase();
     UpdateAI(dt, users);
-
-    float dist = FLT_MAX;
-    SESSION* target = FindClosestPlayer(users, m_detectRange, dist);
-
-    if (target != nullptr && m_skillCooldown <= 0.0f) {
-        if (m_phase == BossPhase::PHASE1) {
-            PatternSlam(users);
-        }
-        else {
-            int pick = rand() % 2;
-            if (pick == 0) PatternSlam(users);
-            else           PatternSweep(users);
-        }
-        m_skillCooldown = RandomSkillCooldown();
-    }
-
 }
 
 void BossMonster::TakeDamage(int damage, long long attackerID,std::unordered_map<long long, SESSION*>& users)
@@ -183,8 +164,6 @@ void BossMonster::UpdateAI(float dt, const std::unordered_map<long long, SESSION
 
 void BossMonster::PatternNormal(const std::unordered_map<long long, SESSION*>& users)
 {
-    if (m_normalAttackTimer < m_normalAttackCooldown) return;
-    m_normalAttackTimer = 0.0f;
 
     BroadcastAttackRange(BossAttackPattern::NORMAL, users);
 
