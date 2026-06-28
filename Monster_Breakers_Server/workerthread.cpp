@@ -13,6 +13,7 @@ SOCKET g_listen_socket = INVALID_SOCKET;
 //std::atomic<long long> g_session_id_counter = 0;
 long long g_session_id_counter = 0;
 
+
 const char* GetJobName(uint8_t job) {
 	switch (static_cast<PLAYER_JOB>(job)) {
 	case PLAYER_JOB::JOB_WARRIOR: return "기사";
@@ -255,6 +256,18 @@ void SESSION::process_packet(unsigned char* p)
 
 		cout << "[로그인] ID=" << _id << " 몬스터 " << monsters.size() << "마리 전송\n";
 
+		if (g_boss && !g_boss->IsDead()) {
+			sc_packet_boss_spawn bossPkt{};
+			bossPkt.size = sizeof(bossPkt);
+			bossPkt.type = SC_P_BOSS_SPAWN;
+			bossPkt.bossID = BossMonster::BOSS_ID;
+			bossPkt.position = g_boss->m_position;
+			bossPkt.hp = g_boss->m_hp;
+			bossPkt.maxHp = BossMonster::BOSS_MAX_HP;
+			do_send(&bossPkt);
+			cout << "[로그인] ID=" << _id << " 보스 스폰 패킷 전송\n";
+		}
+		
 		break;
 	}
 

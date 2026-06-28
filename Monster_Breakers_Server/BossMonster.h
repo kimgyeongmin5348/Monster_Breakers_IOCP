@@ -5,6 +5,13 @@
 
 class SESSION;
 
+enum class BossAIState : uint8_t {
+    IDLE = 0,  
+    CHASE = 1,  
+    ATTACK = 2, 
+    SKILL = 3,
+};
+
 enum class BossAttackPattern : uint8_t {
     NORMAL = 0,
     SLAM = 1,
@@ -38,7 +45,7 @@ public:
     float                       m_moveSpeed = 3.0f;
     bool                        m_isDead = false;
 
-    float                       m_detectRange = 30.0f;
+    float                       m_detectRange = 8.0f;
     float                       m_attackRange = RANGE_NORMAL;
     long long                   m_targetPlayerID = -1;
 
@@ -46,6 +53,10 @@ public:
     float                       m_normalAttackTimer = 0.0f;
     float                       m_skillCooldown = 0.0f;
     float                       m_skillCooldownMax = 12.0f;
+
+    BossAIState                 m_aiState = BossAIState::IDLE;
+    float                       m_patternDuration = 0.0f;
+    float                       m_patternTimer = 0.0f;
 
     BossPhase m_phase = BossPhase::PHASE1;
 
@@ -71,8 +82,12 @@ private:
     void BroadcastAttackRange(BossAttackPattern pattern, const std::unordered_map<long long, SESSION*>& users);
     void BroadcastBossHP(const std::unordered_map<long long, SESSION*>& users);
     void BroadcastBossDeath(long long killerID, const std::unordered_map<long long, SESSION*>& users);
-    void BroadcastBossMove(const std::unordered_map<long long, SESSION*>& users);
+    void BroadcastBossMove(const std::unordered_map<long long, SESSION*>& users, bool isMoving);
     float RandomSkillCooldown();
+    void ExecuteNormal(const std::unordered_map<long long, SESSION*>& users);
+    void ExecuteSlam(const std::unordered_map<long long, SESSION*>& users);
+    void ExecuteSweep(const std::unordered_map<long long, SESSION*>& users);
+    void BroadcastPattern(uint8_t patternType, float range, const std::unordered_map<long long, SESSION*>& users);
 };
 
 BossMonster* SpawnBoss();

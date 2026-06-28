@@ -67,6 +67,7 @@ constexpr char SC_P_BOSS_SPAWN = 70;
 constexpr char SC_P_BOSS_HP = 71;
 constexpr char SC_P_BOSS_PATTERN = 72;  // 패턴 + 공격범위 정보
 constexpr char SC_P_BOSS_DEATH = 73;
+constexpr char SC_P_BOSS_MOVE = 74;
 
 // =================== 주의!! ========================
 // 
@@ -384,6 +385,16 @@ struct sc_packet_boss_spawn {
 	int           hp;
 	int           maxHp;
 };
+
+struct sc_packet_boss_move {
+	unsigned char size;
+	char          type;
+	long long     bossID;
+	XMFLOAT3      position;
+	XMFLOAT3      look;
+	bool          isMoving;
+};
+
 
 struct sc_packet_boss_hp {
 	unsigned char size;

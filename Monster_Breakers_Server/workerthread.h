@@ -1,6 +1,7 @@
 #pragma once
 #include "common.h"
 #include "protocol.h"
+#include "BossMonster.h"
 
 class SESSION;
 
@@ -10,6 +11,7 @@ extern std::atomic<long long> g_client_counter;
 extern std::unordered_map<long long, SESSION*> g_session;
 extern std::mutex g_session_mutex;
 extern SOCKET g_listen_socket;
+extern BossMonster* g_boss;
 
 enum IO_OP { IO_RECV, IO_SEND, IO_ACCEPT };
 
