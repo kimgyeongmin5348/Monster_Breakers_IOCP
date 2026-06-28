@@ -325,7 +325,7 @@ void BossMonster::BroadcastBossMove(const std::unordered_map<long long, SESSION*
 
 BossMonster* SpawnBoss()
 {
-    XMFLOAT3 bossSpawnPos = { -16.f, 0.0f, 41.2f };
+    XMFLOAT3 bossSpawnPos = { 248.7f, 9.5f, 7.7f };
     BossMonster* boss = new BossMonster(bossSpawnPos);
 
     sc_packet_boss_spawn pkt{};

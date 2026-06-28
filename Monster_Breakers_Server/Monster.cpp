@@ -2,17 +2,6 @@
 #include "workerthread.h"
 
 // ================================================================
-// 몬스터 스폰 좌표 직접 지정
-// ================================================================
-
-static const std::vector<XMFLOAT3> SPAWN_POSITIONS = {
-    { -11.000,  0.100f,  35.000f },
-    { -20.000f,  0.100f,  53.000f },
-    { 6.700f,  0.290f, -5.500f },
-
-};
-
-// ================================================================
 // 비정형 사각형 범위 내 랜덤 좌표 생성
 // 이중 삼각형 보간(bilinear) 방식
 // ================================================================
@@ -51,7 +40,27 @@ static XMFLOAT3 GetRandomSpawnZone2()
     XMFLOAT3 Z2B = { 48.0f, 7.1f, 109.0f };  // 우하단
     XMFLOAT3 Z2C = { 68.0f, 7.1f, 109.0f };  // 우상단
     XMFLOAT3 Z2D = { 67.0f, 7.1f, 136.0f };  // 좌상단
-    return RandomPointInQuad(Z2A, Z2B, Z2C, Z2D, 7.1f);
+    return RandomPointInQuad(Z2A, Z2B, Z2C, Z2D, 7.5f);
+}
+
+static XMFLOAT3 GetRandomSpawnZone3()
+{
+    XMFLOAT3 Z3A = { 17.2f,  0.0f, -9.0f };  // 좌상단
+    XMFLOAT3 Z3B = { 20.9f,  0.0f,   0.8f };  // 우상단
+    XMFLOAT3 Z3C = { 28.2f, 0.0f, -1.3f };  // 우하단
+    XMFLOAT3 Z3D = { 24.4f, 0.0f, -14.6f };  // 좌하단
+
+    return RandomPointInQuad(Z3A, Z3B, Z3C, Z3D, 0.0f);
+}
+
+static XMFLOAT3 GetRandomSpawnZone4()
+{
+    XMFLOAT3 Z4A = { 32.8f,  0.2f, -9.4f };  // 좌상단
+    XMFLOAT3 Z4B = { 37.3f,  0.5f,  10.0f };  // 우상단
+    XMFLOAT3 Z4C = { 54.6f, -1.2f,  6.0f };  // 우하단
+    XMFLOAT3 Z4D = {50.5f, -1.2f, -18.8f };  // 좌하단
+
+    return RandomPointInQuad(Z4A, Z4B, Z4C, Z4D, -1.0f);
 }
 
 Monster::Monster(long long id, const XMFLOAT3& spawnPos)
@@ -510,31 +519,6 @@ MonsterManager::~MonsterManager()
     m_monsters.clear();
 }
 
-static float CalcQuadArea(const XMFLOAT3& A, const XMFLOAT3& B, const XMFLOAT3& C, const XMFLOAT3& D)
-{
-    // 삼각형 ABC 면적
-    float area1 = abs((B.x - A.x) * (C.z - A.z) - (C.x - A.x) * (B.z - A.z)) * 0.5f;
-    // 삼각형 ACD 면적
-    float area2 = abs((C.x - A.x) * (D.z - A.z) - (D.x - A.x) * (C.z - A.z)) * 0.5f;
-    return area1 + area2;
-}
-
-
-static bool ValidateSpawnCount(const char* zoneName, float area, int requestCount, float minDist)
-{
-    // 원의 면적 = π * r^2, r = minDist / 2
-    float monsterArea = 3.14159f * (minDist / 2.0f) * (minDist / 2.0f);
-    // 육각형 패킹 효율 약 0.9069 적용 (가장 조밀하게 채울 수 있는 비율)
-    int maxCount = (int)(area * 0.9069f / monsterArea);
-
-    if (requestCount > maxCount)
-    {
-        cout << "[경고] " << zoneName << " 생성 요구수(" << requestCount << "마리)가 너무 많습니다! " << "면적 기준 최대 수용 가능: " << maxCount << "마리 " << "(최소간격 " << minDist << " 기준)\n";
-        return false;
-    }
-    return true;
-}
-
 static bool IsFarEnough(const XMFLOAT3& candidate, const std::vector<XMFLOAT3>& placed, float minDist)
 {
     for (const auto& p : placed)
@@ -551,13 +535,10 @@ void MonsterManager::SpawnMonsters(int count)
 {
     lock_guard<std::mutex> lock(m_mutex);
 
-    std::vector<XMFLOAT3> placed;
-    const float MIN_DIST = 6.0f;
-    const int   MAX_RETRY = 100;
-
-    int zone1Count = 17;
-    int zone2Count = 7;
-
+    int zone1Count = 12;
+    int zone2Count = 9;
+    int zone3Count = 3;
+    int zone4Count = 3;
 
     XMFLOAT3 Z1A = { 20.0f, 0.1f, 78.0f };
     XMFLOAT3 Z1B = { 6.0f, 0.1f, 140.0f };
@@ -569,56 +550,46 @@ void MonsterManager::SpawnMonsters(int count)
     XMFLOAT3 Z2C = { 68.0f, 7.1f, 109.0f };
     XMFLOAT3 Z2D = { 67.0f, 7.1f, 136.0f }; 
 
-    float area1 = CalcQuadArea(Z1A, Z1B, Z1C, Z1D);
-    float area2 = CalcQuadArea(Z2A, Z2B, Z2C, Z2D);
+    XMFLOAT3 Z3A = { 17.2f,  0.0f, -9.0f };  
+    XMFLOAT3 Z3B = { 20.9f,  0.0f,   0.8f }; 
+    XMFLOAT3 Z3C = { 28.2f, 0.0f, -1.3f };  
+    XMFLOAT3 Z3D = { 24.4f, 0.0f, -14.6f };  
 
-    bool zone1OK = ValidateSpawnCount("구역2", area1, zone1Count, MIN_DIST);
-    bool zone2OK = ValidateSpawnCount("구역3", area2, zone2Count, MIN_DIST);
-
-    if (!zone1OK || !zone2OK)
-    {
-        cout << "[서버] 스폰 중단 - 생성 요구수를 줄이거나 구역을 넓혀주세요.\n";
-        return;  // 스폰 중단 (그냥 경고만 하고 진행하려면 return 제거)
-    }
-
-    // 기존 고정 스폰 (3마리)
-    int fixedCount = (std::min)(3, (int)SPAWN_POSITIONS.size());
-    for (int i = 0; i < fixedCount; ++i)
-    {
-        long long id = m_idCounter++;
-        m_monsters[id] = new Monster(id, SPAWN_POSITIONS[i]);
-        placed.push_back(SPAWN_POSITIONS[i]);
-        cout << "[몬스터매니저] 고정스폰 ID=" << id << " pos=(" << SPAWN_POSITIONS[i].x << ", " << SPAWN_POSITIONS[i].z << ")\n";
-    }
+    XMFLOAT3 Z4A = { 32.8f,  0.2f, -9.4f };
+    XMFLOAT3 Z4B = { 37.3f,  0.5f,  10.0f };
+    XMFLOAT3 Z4C = { 54.6f, -1.2f,  6.0f };
+    XMFLOAT3 Z4D = { 50.5f, -1.2f, -18.8f };
 
     for (int i = 0; i < zone1Count; ++i)
     {
         XMFLOAT3 pos = GetRandomSpawnInZone();
-        for (int attempt = 0; attempt < MAX_RETRY; ++attempt)
-        {
-            if (IsFarEnough(pos, placed, MIN_DIST)) break;
-            pos = GetRandomSpawnInZone();
-        }
         long long id = m_idCounter++;
         m_monsters[id] = new Monster(id, pos);
-        placed.push_back(pos);
     }
 
     for (int i = 0; i < zone2Count; ++i)
     {
         XMFLOAT3 pos = GetRandomSpawnZone2();
-        for (int attempt = 0; attempt < MAX_RETRY; ++attempt)
-        {
-            if (IsFarEnough(pos, placed, MIN_DIST)) break;
-            pos = GetRandomSpawnZone2();
-        }
         long long id = m_idCounter++;
         m_monsters[id] = new Monster(id, pos);
-        placed.push_back(pos);
     }
 
-    int total = fixedCount + zone1Count + zone2Count;
-    cout << "[몬스터매니저] 총 " << m_monsters.size() << "마리 스폰 완료 (최소간격 " << MIN_DIST << ")\n";
+    for (int i = 0; i < zone3Count; ++i)
+    {
+        XMFLOAT3 pos = GetRandomSpawnZone3();
+        long long id = m_idCounter++;
+        m_monsters[id] = new Monster(id, pos);
+    }
+
+    for (int i = 0; i < zone4Count; ++i)
+    {
+        XMFLOAT3 pos = GetRandomSpawnZone4();
+        long long id = m_idCounter++;
+        m_monsters[id] = new Monster(id, pos);
+    }
+
+    int total = zone1Count + zone2Count + zone3Count + zone3Count;
+    cout << "[몬스터매니저] 총 " << m_monsters.size() << "마리 스폰 완료\n";
 }
 
 void MonsterManager::Update(float dt, const std::unordered_map<long long, SESSION*>& users)
