@@ -25,8 +25,9 @@ enum class BossPhase : uint8_t {
 
 class BossMonster {
 public:
+    // 기본
     static constexpr long long  BOSS_ID = 99999;
-    static constexpr int        BOSS_MAX_HP = 50000;
+    static constexpr int        BOSS_MAX_HP = 100;
     static constexpr int        BOSS_ATTACK = 40;
     static constexpr int        BOSS_SKILL_BONUS = 20;
 
@@ -47,12 +48,17 @@ public:
 
     float                       m_detectRange = 8.0f;
     float                       m_attackRange = RANGE_NORMAL;
-    long long                   m_targetPlayerID = -1;
 
-    float                       m_normalAttackCooldown = 3.0f;
+    // 어그로 관련
+    long long                   m_targetPlayerID = -1;
+    long long                   m_tauntTargetID = -1;  // 도발한 플레이어
+    float                       m_tauntTimer = 0.0f; // 도발 남은 시간
+
+    // 공격 관련
+    float                       m_normalAttackCooldown = 2.0f;
     float                       m_normalAttackTimer = 0.0f;
-    float                       m_skillCooldown = 0.0f;
-    float                       m_skillCooldownMax = 12.0f;
+    int                         m_normalAttackCount = 0;
+    int                         m_normalAttackUntilSkill = 3; // 지정한 숫자 채우면 스킬 발동
 
     BossAIState                 m_aiState = BossAIState::IDLE;
     float                       m_patternDuration = 0.0f;
@@ -66,6 +72,7 @@ public:
 
     void Update(float dt, const std::unordered_map<long long, SESSION*>& users);
     void TakeDamage(int damage, long long attackerID, std::unordered_map<long long, SESSION*>& users);
+    void Taunt(long long tauntPlayerID, float duration);
     bool IsDead() const { return m_isDead; }
 
 private:
@@ -76,6 +83,7 @@ private:
     void PatternSlam(const std::unordered_map<long long, SESSION*>& users);
     void PatternSweep(const std::unordered_map<long long, SESSION*>& users);
 
+    SESSION* FindTarget(const std::unordered_map<long long, SESSION*>& users) const;
     SESSION* FindClosestPlayer(const std::unordered_map<long long, SESSION*>& users, float range, float& outDist) const;
     float    Distance(const XMFLOAT3& a, const XMFLOAT3& b) const;
 
@@ -83,11 +91,13 @@ private:
     void BroadcastBossHP(const std::unordered_map<long long, SESSION*>& users);
     void BroadcastBossDeath(long long killerID, const std::unordered_map<long long, SESSION*>& users);
     void BroadcastBossMove(const std::unordered_map<long long, SESSION*>& users, bool isMoving);
-    float RandomSkillCooldown();
+    //float RandomSkillCooldown();
     void ExecuteNormal(const std::unordered_map<long long, SESSION*>& users);
     void ExecuteSlam(const std::unordered_map<long long, SESSION*>& users);
     void ExecuteSweep(const std::unordered_map<long long, SESSION*>& users);
-    void BroadcastPattern(uint8_t patternType, float range, const std::unordered_map<long long, SESSION*>& users);
+    int  NextSkillThreshold();
+
+    //void BroadcastPattern(uint8_t patternType, float range, const std::unordered_map<long long, SESSION*>& users);
 };
 
 BossMonster* SpawnBoss();

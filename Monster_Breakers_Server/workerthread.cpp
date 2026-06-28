@@ -543,6 +543,17 @@ void SESSION::process_packet(unsigned char* p)
 			}
 		}
 
+		// BOSS
+		if (g_boss && !g_boss->IsDead()) {
+			float dx = g_boss->m_position.x - _position.x;
+			float dz = g_boss->m_position.z - _position.z;
+			float dist = sqrtf(dx * dx + dz * dz);
+			if (dist <= tauntRange) {
+				g_boss->Taunt(_id, TAUNT_DURATION);
+				affected++;
+			}
+		}
+
 		cout << "[도발] ID=" << _id << " 범위=" << tauntRange << " 영향받은 몬스터=" << affected << "마리\n";
 
 		sc_packet_taunt pkt{};

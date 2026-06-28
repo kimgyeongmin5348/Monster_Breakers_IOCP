@@ -6,6 +6,14 @@ BossMonster::BossMonster(const XMFLOAT3& spawnPos)
 {
     m_position = spawnPos;
     m_spawnPos = spawnPos;
+    m_normalAttackUntilSkill = NextSkillThreshold();
+}
+
+int BossMonster::NextSkillThreshold()
+{
+    static std::mt19937 rng{ std::random_device{}() };
+    std::uniform_int_distribution<int> dist(3, 5);
+    return dist(rng);
 }
 
 float BossMonster::Distance(const XMFLOAT3& a, const XMFLOAT3& b) const
@@ -13,6 +21,20 @@ float BossMonster::Distance(const XMFLOAT3& a, const XMFLOAT3& b) const
     float dx = a.x - b.x;
     float dz = a.z - b.z;
     return sqrtf(dx * dx + dz * dz);
+}
+
+SESSION* BossMonster::FindTarget(const std::unordered_map<long long, SESSION*>& users) const
+{
+    // 도발 타겟이 살아있으면 무조건 그쪽
+    if (m_tauntTimer > 0.0f && m_tauntTargetID != -1) {
+        auto it = users.find(m_tauntTargetID);
+        if (it != users.end() && it->second && !it->second->_isDead)
+            return it->second;
+    }
+
+    // 없으면 탐지 범위 내 가장 가까운 플레이어
+    float dummy = FLT_MAX;
+    return FindClosestPlayer(users, m_detectRange, dummy);
 }
 
 SESSION* BossMonster::FindClosestPlayer(const std::unordered_map<long long, SESSION*>& users, float range, float& outDist) const
@@ -35,8 +57,26 @@ void BossMonster::Update(float dt, const std::unordered_map<long long, SESSION*>
 {
     if (m_isDead) return;
 
+    // 도발 타이머
+    if (m_tauntTimer > 0.0f) {
+        m_tauntTimer -= dt;
+        if (m_tauntTimer <= 0.0f) {
+            m_tauntTimer = 0.0f;
+            m_tauntTargetID = -1;
+            cout << "[Boss] 도발 해제\n";
+        }
+    }
+
     UpdatePhase();
     UpdateAI(dt, users);
+}
+
+void BossMonster::Taunt(long long tauntPlayerID, float duration)
+{
+    m_tauntTargetID = tauntPlayerID;
+    m_tauntTimer = duration;
+    m_aiState = BossAIState::CHASE;
+    cout << "[Boss] 도발 적용 → 타겟=" << tauntPlayerID << " 지속=" << duration << "초\n";
 }
 
 void BossMonster::TakeDamage(int damage, long long attackerID,std::unordered_map<long long, SESSION*>& users)
@@ -60,66 +100,26 @@ void BossMonster::UpdatePhase()
     if (m_phase == BossPhase::PHASE1 && m_hp <= BOSS_MAX_HP / 2) {
         m_phase = BossPhase::PHASE2;
         m_attack = BOSS_ATTACK + BOSS_SKILL_BONUS;
-        m_skillCooldownMax = 8.0f;
         m_moveSpeed = 4.5f;
         cout << "[Boss] 페이즈2 전환, 공격력=" << m_attack << "\n";
     }
-}
-
-void BossMonster::ExecuteNormal(const std::unordered_map<long long, SESSION*>& users)
-{
-    m_aiState = BossAIState::ATTACK;
-    m_patternTimer = 0.0f;
-    m_patternDuration = 2.0f;   // 일반공격 애니메이션 길이에 맞게 조정
-
-    BroadcastPattern(0, RANGE_NORMAL, users);   // patternType=0
-    PatternNormal(users);
-}
-
-void BossMonster::ExecuteSlam(const std::unordered_map<long long, SESSION*>& users)
-{
-    m_aiState = BossAIState::SKILL;
-    m_patternTimer = 0.0f;
-    m_patternDuration = 2.5f;
-    m_skillCooldown = m_skillCooldownMax;     // 스킬 쿨 리셋
-
-    BroadcastPattern(1, RANGE_SLAM, users);     // patternType=1
-    PatternSlam(users);
-}
-
-void BossMonster::ExecuteSweep(const std::unordered_map<long long, SESSION*>& users)
-{
-    m_aiState = BossAIState::SKILL;
-    m_patternTimer = 0.0f;
-    m_patternDuration = 2.5f;
-    m_skillCooldown = m_skillCooldownMax;
-
-    BroadcastPattern(2, RANGE_SWEEP, users);    // patternType=2
-    PatternSweep(users);
 }
 
 void BossMonster::UpdateAI(float dt, const std::unordered_map<long long, SESSION*>& users)
 {
     if (m_isDead) return;
 
-    // 스킬/공격 시전 중이면 타이머만 돌리고 끝나면 복귀
     if (m_aiState == BossAIState::ATTACK || m_aiState == BossAIState::SKILL) {
         m_patternTimer += dt;
         if (m_patternTimer >= m_patternDuration) {
-            // 패턴 끝 → 스킬쿨 감소 후 CHASE로 복귀
-            if (m_aiState == BossAIState::ATTACK) {
-                if (m_skillCooldown > 0.0f)
-                    m_skillCooldown -= m_patternDuration;
-            }
             m_aiState = BossAIState::CHASE;
             m_patternTimer = 0.0f;
         }
-        return; // 패턴 중엔 이동/다른공격 완전 차단
+        return;
     }
 
     // 타겟 탐색
-    float dist = FLT_MAX;
-    SESSION* target = FindClosestPlayer(users, m_detectRange, dist);
+    SESSION* target = FindTarget(users);
     if (!target) {
         m_aiState = BossAIState::IDLE;
         BroadcastBossMove(users, false);
@@ -144,22 +144,58 @@ void BossMonster::UpdateAI(float dt, const std::unordered_map<long long, SESSION
     // 공격 범위 안 -> 정지 후 공격 판단
     BroadcastBossMove(users, false);  // Idle(정지)
 
-    // 스킬쿨 돌았으면 스킬 우선
-    if (m_skillCooldown <= 0.0f) {
-        int pick = rand() % 2;
-        if (pick == 0) ExecuteSlam(users);
-        else           ExecuteSweep(users);
-        return;
-    }
-
-    // 스킬 대기 중 → 일반공격 타이머 체크
     m_normalAttackTimer += dt;
-    m_skillCooldown -= dt;
+    if (m_normalAttackTimer < m_normalAttackCooldown) return;
+    m_normalAttackTimer = 0.0f;
 
-    if (m_normalAttackTimer >= m_normalAttackCooldown) {
-        m_normalAttackTimer = 0.0f;
+    // 기본공격 횟수 누적 - n 회 채우면 스킬 시전
+    m_normalAttackCount++;
+
+    if (m_normalAttackCount >= m_normalAttackUntilSkill) {
+        m_normalAttackCount = 0;
+        m_normalAttackUntilSkill = NextSkillThreshold(); // 다음 스킬 임계값 재설정
+
+  
+        
+        if (m_phase == BossPhase::PHASE1) { // 페이즈1: 스킬1만
+            ExecuteSlam(users);
+        }
+        else { // 페이즈2: 랜덤
+            int pick = rand() % 2;
+            if (pick == 0) ExecuteSlam(users);
+            else           ExecuteSweep(users);
+        }
+    }
+    else {
         ExecuteNormal(users);
     }
+}
+
+void BossMonster::ExecuteNormal(const std::unordered_map<long long, SESSION*>& users)
+{
+    m_aiState = BossAIState::ATTACK;
+    m_patternTimer = 0.0f;
+    m_patternDuration = 2.0f;   // 일반공격 애니메이션 길이에 맞게 조정
+
+    PatternNormal(users);
+}
+
+void BossMonster::ExecuteSlam(const std::unordered_map<long long, SESSION*>& users)
+{
+    m_aiState = BossAIState::SKILL;
+    m_patternTimer = 0.0f;
+    m_patternDuration = 2.5f;
+
+    PatternSlam(users);
+}
+
+void BossMonster::ExecuteSweep(const std::unordered_map<long long, SESSION*>& users)
+{
+    m_aiState = BossAIState::SKILL;
+    m_patternTimer = 0.0f;
+    m_patternDuration = 2.5f;
+
+    PatternSweep(users);
 }
 
 void BossMonster::PatternNormal(const std::unordered_map<long long, SESSION*>& users)
@@ -285,30 +321,6 @@ void BossMonster::BroadcastBossMove(const std::unordered_map<long long, SESSION*
 
     for (auto& [id, session] : users)
         session->do_send(&pkt);
-}
-
-void BossMonster::BroadcastPattern(uint8_t patternType, float range, const std::unordered_map<long long, SESSION*>& users)
-{
-    sc_packet_boss_pattern pkt{};
-    pkt.size = sizeof(pkt);
-    pkt.type = SC_P_BOSS_PATTERN;
-    pkt.bossID = m_id;
-    pkt.patternType = patternType;
-    pkt.attackRange = range;
-    pkt.attackCenter = m_position;   // 보스 현재 위치를 범위 중심으로
-
-    for (auto& [id, session] : users)
-        session->do_send(&pkt);
-}
-
-float BossMonster::RandomSkillCooldown()
-{
-    static std::mt19937 rng{ std::random_device{}() };
-    std::uniform_real_distribution<float> dist(
-        m_skillCooldownMax * 0.8f,
-        m_skillCooldownMax * 1.2f
-    );
-    return dist(rng);
 }
 
 BossMonster* SpawnBoss()
