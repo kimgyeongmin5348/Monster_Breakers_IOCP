@@ -586,9 +586,19 @@ void MonsterManager::SpawnMonsters(int count)
     XMFLOAT3 Z4C = { 54.6f, -1.2f,  6.0f };
     XMFLOAT3 Z4D = { 50.5f, -1.2f, -18.8f };
 
+    std::vector<XMFLOAT3> placed;  
+    const float MIN_DIST = 3.0f;   
+    const int   MAX_RETRY = 50;
+
     for (int i = 0; i < zone1Count; ++i)
     {
         XMFLOAT3 pos = GetRandomSpawnInZone();
+        for (int retry = 0; retry < MAX_RETRY; ++retry)
+        {
+            if (IsFarEnough(pos, placed, MIN_DIST)) break;
+            pos = GetRandomSpawnInZone();
+        }
+        placed.push_back(pos);
         long long id = m_idCounter++;
         m_monsters[id] = new Monster(id, pos);
     }
@@ -596,6 +606,12 @@ void MonsterManager::SpawnMonsters(int count)
     for (int i = 0; i < zone2Count; ++i)
     {
         XMFLOAT3 pos = GetRandomSpawnZone2();
+        for (int retry = 0; retry < MAX_RETRY; ++retry)
+        {
+            if (IsFarEnough(pos, placed, MIN_DIST)) break;
+            pos = GetRandomSpawnZone2();
+        }
+        placed.push_back(pos);
         long long id = m_idCounter++;
         m_monsters[id] = new Monster(id, pos);
     }
@@ -603,6 +619,12 @@ void MonsterManager::SpawnMonsters(int count)
     for (int i = 0; i < zone3Count; ++i)
     {
         XMFLOAT3 pos = GetRandomSpawnZone3();
+        for (int retry = 0; retry < MAX_RETRY; ++retry)
+        {
+            if (IsFarEnough(pos, placed, MIN_DIST)) break;
+            pos = GetRandomSpawnZone3();
+        }
+        placed.push_back(pos);
         long long id = m_idCounter++;
         m_monsters[id] = new Monster(id, pos);
     }
@@ -610,12 +632,18 @@ void MonsterManager::SpawnMonsters(int count)
     for (int i = 0; i < zone4Count; ++i)
     {
         XMFLOAT3 pos = GetRandomSpawnZone4();
+        for (int retry = 0; retry < MAX_RETRY; ++retry)
+        {
+            if (IsFarEnough(pos, placed, MIN_DIST)) break;
+            pos = GetRandomSpawnZone4();
+        }
+        placed.push_back(pos);
         long long id = m_idCounter++;
         m_monsters[id] = new Monster(id, pos);
     }
 
-    int total = zone1Count + zone2Count + zone3Count + zone3Count;
-    cout << "[몬스터매니저] 총 " << m_monsters.size() << "마리 스폰 완료\n";
+    int total = zone1Count + zone2Count + zone3Count + zone4Count;
+    cout << "[몬스터매니저] 총 " << total << "마리 스폰 완료\n";
 }
 
 void MonsterManager::Update(float dt, const std::unordered_map<long long, SESSION*>& users)
