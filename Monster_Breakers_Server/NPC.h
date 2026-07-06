@@ -15,7 +15,7 @@ enum class MissionTargetType
 struct MissionInfo
 {
     int               missionID;
-    std::string       description;
+    string       description;
     MissionTargetType targetType;
     int               targetCount;
     int               rewardGold;
@@ -34,10 +34,8 @@ class NPCManager
 public:
     NPCManager();
 
-    // 클라이언트가 NPC와 상호작용했을 때 호출
     void OnNPCInteract(long long playerID, SESSION* session);
 
-    // 몬스터가 죽었을 때 MonsterManager 쪽에서 호출 (killerID = 처치한 플레이어)
     void OnMonsterKilled(long long killerID, long long monsterID, SESSION* session);
 
 private:
@@ -51,7 +49,6 @@ private:
     std::unordered_map<long long, PlayerMissionState> m_playerMissions;
     std::mutex m_mutex;
 
-    // 해안가 몬스터 고유ID 범위
     static constexpr long long COASTAL_MONSTER_ID_MIN = 10022;
     static constexpr long long COASTAL_MONSTER_ID_MAX = 10027;
 };

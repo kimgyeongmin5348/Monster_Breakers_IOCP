@@ -5,20 +5,11 @@ NPCManager g_npcManager;
 
 NPCManager::NPCManager()
 {
-    // 미션1 - 몬스터 10마리
-    m_missionTable.push_back({
-        1, "몬스터 10마리를 처치하고 오라.", MissionTargetType::ANY_MONSTER, 10, 5000
-        });
+    m_missionTable.push_back({ 1, "몬스터 10마리를 처치하라.", MissionTargetType::ANY_MONSTER, 10, 5000 });
 
-    // 미션2 - 몬스터 5마리
-    m_missionTable.push_back({
-        2, "몬스터 5마리를 처치하고 오라.", MissionTargetType::ANY_MONSTER, 5, 2500
-        });
+    m_missionTable.push_back({ 2, "몬스터 5마리를 처치하라.", MissionTargetType::ANY_MONSTER, 5, 2500 });
 
-    // 미션3 - 해안가 몬스터 3마리
-    m_missionTable.push_back({
-        3, "해안가의 몬스터 3마리를 처치하고 오라.", MissionTargetType::COASTAL_MONSTER, 3, 2000
-        });
+    m_missionTable.push_back({ 3, "해안가의 몬스터 3마리를 처치하라.", MissionTargetType::COASTAL_MONSTER, 3, 2000 });
 }
 
 // ================================================================
@@ -89,9 +80,6 @@ bool NPCManager::IsCoastalMonster(long long monsterID) const
     return monsterID >= COASTAL_MONSTER_ID_MIN && monsterID <= COASTAL_MONSTER_ID_MAX;
 }
 
-// ================================================================
-// 즉시 보상 지급
-// ================================================================
 void NPCManager::CompleteMission(long long playerID, SESSION* session, const MissionInfo& mission)
 {
     if (!session) return;
@@ -112,9 +100,6 @@ void NPCManager::CompleteMission(long long playerID, SESSION* session, const Mis
     cout << "[NPC] ID=" << playerID << " 미션 완료! missionID=" << mission.missionID << " 보상=" << mission.rewardGold << "G (현재=" << session->_gold << "G)\n";
 }
 
-// ================================================================
-// 클라이언트에 미션 정보 전송
-// ================================================================
 void NPCManager::SendMissionInfo(SESSION* session, const MissionInfo& mission)
 {
     if (!session) return;
