@@ -25,6 +25,9 @@
     <Filter Include="Contents\BossMonster">
       <UniqueIdentifier>{f5406851-c952-47dc-9291-63637c247e2c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Contents\NPC">
+      <UniqueIdentifier>{a8b888ae-c789-4349-9e27-caa84c10e12d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="server_main.cpp">
@@ -38,6 +41,9 @@
     </ClCompile>
     <ClCompile Include="BossMonster.cpp">
       <Filter>Contents\BossMonster</Filter>
+    </ClCompile>
+    <ClCompile Include="NPC.cpp">
+      <Filter>Contents\NPC</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -55,6 +61,9 @@
     </ClInclude>
     <ClInclude Include="BossMonster.h">
       <Filter>Contents\BossMonster</Filter>
+    </ClInclude>
+    <ClInclude Include="NPC.h">
+      <Filter>Contents\NPC</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

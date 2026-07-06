@@ -1,5 +1,6 @@
 #include "workerthread.h"
 #include "Monster.h"
+#include "NPC.h"
 #include "protocol.h"
 
 class SESSION;
@@ -798,6 +799,14 @@ void SESSION::process_packet(unsigned char* p)
 		MonsterManager::GetInstance().OnMonsterHit(packet->monsterID, packet->damage, _id, snapshot);
 		break;
 	}
+
+	case CS_P_NPC_INTERACT:
+	{
+		cs_packet_npc_interact* packet = reinterpret_cast<cs_packet_npc_interact*>(p);
+		g_npcManager.OnNPCInteract(_id, this);
+		break;
+	}
+
 	default:
 		std::cout << "[경고] 잘못된 패킷 타입: " << (int)packet_type << "\n";
 		return;
@@ -830,8 +839,6 @@ void CheckAndHandleDeath(SESSION* target)
 	cout << "[사망] ID=" << target->_id << " 사망 처리 → 3초 후 리스폰\n";
 
 }
-
-
 
 void BroadcastToAll(void* pkt, long long exclude_id = -1) {
 	unsigned char packet_size = reinterpret_cast<unsigned char*>(pkt)[0];
