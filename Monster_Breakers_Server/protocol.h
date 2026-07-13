@@ -411,6 +411,7 @@ struct sc_packet_boss_pattern {
 	long long     bossID;
 	uint8_t       patternType;
 	XMFLOAT3      attackCenter;
+	XMFLOAT3      look;
 	float         attackRange;
 	float         sweepAngle;
 };

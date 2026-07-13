@@ -281,19 +281,18 @@ void BossMonster::BroadcastAttackRange(BossAttackPattern pattern, const std::uno
     pkt.bossID = m_id;
     pkt.patternType = static_cast<uint8_t>(pattern);
     pkt.attackCenter = m_position;
+    pkt.look = m_look;
     pkt.sweepAngle = 360.0f;
 
     switch (pattern) {
     case BossAttackPattern::NORMAL: pkt.attackRange = RANGE_NORMAL; break;
     case BossAttackPattern::SLAM:   pkt.attackRange = RANGE_SLAM;   break;
-    case BossAttackPattern::SWEEP:
-        pkt.attackRange = RANGE_SWEEP;
-        pkt.sweepAngle = 120.0f;
-        break;
+    case BossAttackPattern::SWEEP:pkt.attackRange = RANGE_SWEEP; pkt.sweepAngle = 120.0f;  break;
     }
 
     for (auto& [id, session] : users)
         session->do_send(&pkt);
+
 }
 
 void BossMonster::BroadcastBossHP(const std::unordered_map<long long, SESSION*>& users)
