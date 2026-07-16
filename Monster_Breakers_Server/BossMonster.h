@@ -44,6 +44,8 @@ public:
     int                         m_maxHp = BOSS_MAX_HP;
     int                         m_attack = BOSS_ATTACK;
     float                       m_moveSpeed = 3.0f;
+    // 목표가 바뀌어도 즉시 방향을 꺾지 않도록 하는 초당 회전량.
+    float                       m_turnSpeed = DirectX::XMConvertToRadians(240.0f);
     bool                        m_isDead = false;
 
     float                       m_detectRange = 8.0f;

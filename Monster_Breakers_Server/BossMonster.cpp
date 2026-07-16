@@ -1,6 +1,22 @@
 #include "BossMonster.h"    
 #include "workerthread.h"  
 
+namespace
+{
+    // XZ 평면에서 현재 바라보는 방향을 목표 방향 쪽으로 제한된 각도만큼 회전한다.
+    XMFLOAT3 TurnTowards(const XMFLOAT3& current, float targetX, float targetZ, float maxRadians)
+    {
+        const float dot = std::clamp(current.x * targetX + current.z * targetZ, -1.0f, 1.0f);
+        const float cross = current.x * targetZ - current.z * targetX;
+        const float angle = atan2f(cross, dot);
+        const float step = std::clamp(angle, -maxRadians, maxRadians);
+        const float cosine = cosf(step);
+        const float sine = sinf(step);
+
+        return { current.x * cosine - current.z * sine, 0.0f,
+                 current.x * sine + current.z * cosine };
+    }
+}
 
 BossMonster::BossMonster(const XMFLOAT3& spawnPos)
 {
@@ -112,6 +128,9 @@ void BossMonster::UpdateAI(float dt, const std::unordered_map<long long, SESSION
     if (m_aiState == BossAIState::ATTACK || m_aiState == BossAIState::SKILL) {
         m_patternTimer += dt;
         if (m_patternTimer >= m_patternDuration) {
+            // 공격/스킬을 재생한 시간 자체를 다음 공격 쿨다운으로 인정한다.
+            // 그렇지 않으면 모션 종료 후 normalAttackCooldown만큼 다시 IDLE에 머문다.
+            m_normalAttackTimer = m_normalAttackCooldown;
             m_aiState = BossAIState::CHASE;
             m_patternTimer = 0.0f;
         }
@@ -130,31 +149,40 @@ void BossMonster::UpdateAI(float dt, const std::unordered_map<long long, SESSION
     float dz = target->_position.z - m_position.z;
     float len = sqrtf(dx * dx + dz * dz);
 
-    // 공격 범위 밖 -> 추격
+    // 공격 범위 밖 -> 먼저 자연스럽게 회전하고, 정면을 볼수록 빠르게 추격한다.
     if (len > m_attackRange) {
         m_aiState = BossAIState::CHASE;
         float nx = dx / len, nz = dz / len;
-        m_position.x += nx * m_moveSpeed * dt;
-        m_position.z += nz * m_moveSpeed * dt;
-        m_look = { nx, 0.0f, nz };
+        m_look = TurnTowards(m_look, nx, nz, m_turnSpeed * dt);
+
+        // 방향을 크게 틀고 있는 동안에는 거의 전진하지 않아 옆으로 미끄러지는 현상을 막는다.
+        const float facingDot = std::clamp(m_look.x * nx + m_look.z * nz, 0.0f, 1.0f);
+        const float moveScale = facingDot * facingDot;
+        const float distanceToAttackRange = len - m_attackRange;
+        const float moveDistance = (std::min)(m_moveSpeed * moveScale * dt, distanceToAttackRange);
+        m_position.x += m_look.x * moveDistance;
+        m_position.z += m_look.z * moveDistance;
         BroadcastBossMove(users, true);   // Walk
+        return;
+    }
+
+    // 플레이어와 완전히 겹친 경우에는 방향 벡터를 계산하지 않는다.
+    if (len <= 0.001f) {
+        BroadcastBossMove(users, false);
         return;
     }
 
     float targetDirX = dx / len;
     float targetDirZ = dz / len;
 
+    m_look = TurnTowards(m_look, targetDirX, targetDirZ, m_turnSpeed * dt);
     float dotFacing = m_look.x * targetDirX + m_look.z * targetDirZ;
-
-    m_look = { targetDirX, 0.0f, targetDirZ };
 
     if (dotFacing < 0.95f)
     {
         BroadcastBossMove(users, true);
         return;
     }
-
-    BroadcastBossMove(users, false);
 
     m_normalAttackTimer += dt;
     if (m_normalAttackTimer < m_normalAttackCooldown) return;
@@ -185,6 +213,9 @@ void BossMonster::UpdateAI(float dt, const std::unordered_map<long long, SESSION
 
 void BossMonster::ExecuteNormal(const std::unordered_map<long long, SESSION*>& users)
 {
+    // 이동 상태 패킷은 공격 시작 순간에만 한 번 보낸다.
+    // 공격 중에는 이동 패킷을 보내지 않아 클라이언트 애니메이션을 덮어쓰지 않는다.
+    BroadcastBossMove(users, false);
     m_aiState = BossAIState::ATTACK;
     m_patternTimer = 0.0f;
     m_patternDuration = 2.0f;   // 일반공격 애니메이션 길이에 맞게 조정
@@ -194,6 +225,7 @@ void BossMonster::ExecuteNormal(const std::unordered_map<long long, SESSION*>& u
 
 void BossMonster::ExecuteSlam(const std::unordered_map<long long, SESSION*>& users)
 {
+    BroadcastBossMove(users, false);
     m_aiState = BossAIState::SKILL;
     m_patternTimer = 0.0f;
     m_patternDuration = 2.5f;
@@ -203,6 +235,7 @@ void BossMonster::ExecuteSlam(const std::unordered_map<long long, SESSION*>& use
 
 void BossMonster::ExecuteSweep(const std::unordered_map<long long, SESSION*>& users)
 {
+    BroadcastBossMove(users, false);
     m_aiState = BossAIState::SKILL;
     m_patternTimer = 0.0f;
     m_patternDuration = 2.5f;

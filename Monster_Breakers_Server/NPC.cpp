@@ -5,11 +5,11 @@ NPCManager g_npcManager;
 
 NPCManager::NPCManager()
 {
-    m_missionTable.push_back({ 1, "몬스터 10마리를 처치하라.", MissionTargetType::ANY_MONSTER, 10, 5000 });
+    m_missionTable.push_back({ 1, "Defeat 10 Monster.", MissionTargetType::ANY_MONSTER, 10, 5000 });
 
-    m_missionTable.push_back({ 2, "몬스터 5마리를 처치하라.", MissionTargetType::ANY_MONSTER, 5, 2500 });
+    m_missionTable.push_back({ 2, "Defeat 5 Monster.", MissionTargetType::ANY_MONSTER, 5, 2500 });
 
-    m_missionTable.push_back({ 3, "해안가의 몬스터 3마리를 처치하라.", MissionTargetType::COASTAL_MONSTER, 3, 2000 });
+    m_missionTable.push_back({ 3, "Defeat 3 Monsters at the Coastal_Monster.", MissionTargetType::COASTAL_MONSTER, 3, 2000 });
 }
 
 // ================================================================
