@@ -76,7 +76,8 @@ MonsterState Monster::ToClientAnimState() const
     {
     case MonsterAIState::IDLE:    return MonsterState::Idle;
     case MonsterAIState::CHASE:   return MonsterState::Walk;
-    case MonsterAIState::ATTACK:  return MonsterState::Attack;
+    case MonsterAIState::ATTACK:  // 공격 애니메이션을 타이머 기반으로 유지
+        return (m_attackAnimTimer > 0.0f) ? MonsterState::Attack : MonsterState::Idle;
     case MonsterAIState::RETURN:  return MonsterState::Walk;
     default:                      return MonsterState::Idle;
     }
@@ -97,6 +98,9 @@ void Monster::Update(float dt, const std::unordered_map<long long, SESSION*>& us
     }
 
     m_attackCooldownTimer -= dt;
+    // 공격 애니메이션 타이머 감소 (0 이하로 떨어지지 않도록)
+    m_attackAnimTimer -= dt;
+    if (m_attackAnimTimer < 0.0f) m_attackAnimTimer = 0.0f;
 
     if (m_isTaunted)
     {
@@ -339,7 +343,7 @@ void Monster::UpdateAttack(float dt, const std::unordered_map<long long, SESSION
 
     float dotFacing = m_look.x * targetDirX + m_look.z * targetDirZ;
 
-    // 이제 m_look을 타겟 방향으로 갱신
+    // 현재 m_look이 플레이어를 바라보도록 설정
     m_look = { targetDirX, 0.0f, targetDirZ };
 
     if (dotFacing < 0.95f)
@@ -356,17 +360,18 @@ void Monster::UpdateAttack(float dt, const std::unordered_map<long long, SESSION
     }
     else
     {
-        // 타겟 정면 봄 - 공격 처리 + Attack 패킷
+        // 플레이어를 바라보고 있음 - 근접시 공격 처리
         if (m_attackCooldownTimer <= 0.0f)
         {
             int finalDamage = target->_isBlocking ? 0 : m_attack;
             target->_hp -= finalDamage;
             m_attackCooldownTimer = m_attackCooldown;
+            m_attackAnimTimer = m_attackAnimDuration; // 데미지 발생 시 애니메이션 타이머 설정
             CheckAndHandleDeath(target);
             target->send_player_info_packet();
-            cout << "[몬스터공격] 타겟ID=" << target->_id << " damage=" << finalDamage << " remainHP=" << target->_hp << "\n";
+            cout << "[몬스터공격] 플레이어ID=" << target->_id << " damage=" << finalDamage << " remainHP=" << target->_hp << "\n";
         }
-        BroadcastMove(users);  // Attack 상태 패킷
+        BroadcastMove(users);  // Attack 상태 전송
     }
 }
 
@@ -473,6 +478,8 @@ void Monster::BroadcastMove(const std::unordered_map<long long, SESSION*>& users
 
     for (auto& [id, session] : users)
         session->do_send(&pkt);
+
+    // 애니메이션 타이머가 있으므로 별도 플래그 초기화 불필요
 }
 
 void Monster::BroadcastHPUpdate(const std::unordered_map<long long, SESSION*>& users)

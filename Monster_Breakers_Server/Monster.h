@@ -55,6 +55,9 @@ public:
     float       m_originalLeaveRange = 5.0f;   // 도발 해제 시 복구용
     float       m_attackCooldown = 2.0f;   // 공격 쿨타임 2초
     float       m_attackCooldownTimer = 0.0f;
+    // 공격 애니메이션을 일정 시간동안 유지하기 위한 타이머
+    float       m_attackAnimDuration = 0.5f; // 애니메이션 표시 시간(초)
+    float       m_attackAnimTimer = 0.0f;
 
     // -------------------------------------------------------
     // 상태
