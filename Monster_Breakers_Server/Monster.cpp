@@ -1,5 +1,6 @@
 #include "Monster.h"
 #include "workerthread.h"
+#include "NPC.h"
 
 // ================================================================
 // 비정형 사각형 범위 내 랜덤 좌표 생성
@@ -418,6 +419,11 @@ void Monster::TakeDamage(int damage, long long attackerID, std::unordered_map<lo
 
         BroadcastDeath(attackerID, users);
         SendGoldReward(attackerID, users);
+
+        // 처치한 플레이어의 진행 중인 NPC 미션도 같은 처치 이벤트로 갱신한다.
+        auto killerIt = users.find(attackerID);
+        if (killerIt != users.end() && killerIt->second)
+            g_npcManager.OnMonsterKilled(attackerID, m_id, killerIt->second);
     }
 }
 
