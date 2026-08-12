@@ -73,6 +73,7 @@ constexpr char SC_P_BOSS_MOVE = 74;
 constexpr char CS_P_NPC_INTERACT = 75;
 constexpr char SC_P_NPC_MISSION = 76;
 constexpr char SC_P_MISSION_COMPLETE = 77;
+constexpr char SC_P_MISSION_PROGRESS = 78;
 
 // =================== 주의!! ========================
 // 
@@ -462,6 +463,15 @@ struct sc_packet_mission_complete
 	int					missionID;
 	int					rewardGold;
 	int					totalGold;
+};
+
+struct sc_packet_mission_progress
+{
+	unsigned char		size;
+	char				type;
+	int					missionID;
+	int					currentCount;
+	int					targetCount;
 };
 
 #pragma pack (pop)

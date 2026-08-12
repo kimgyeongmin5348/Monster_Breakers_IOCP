@@ -28,6 +28,7 @@ void NPCManager::OnNPCInteract(long long playerID, SESSION* session)
     m_playerMissions[playerID] = state;
 
     SendMissionInfo(session, mission);
+    SendMissionProgress(session, state, mission);
 
     cout << "[NPC] ID=" << playerID << " 미션 지급 -> missionID=" << mission.missionID << " (" << mission.description << ")\n";
 }
@@ -68,6 +69,7 @@ void NPCManager::OnMonsterKilled(long long killerID, long long monsterID, SESSIO
     state.killCount++;
 
     cout << "[NPC] ID=" << killerID << " 미션 진행 " << state.killCount << "/" << mission->targetCount << "\n";
+    SendMissionProgress(session, state, *mission);
 
     if (state.killCount >= mission->targetCount)
     {
@@ -98,6 +100,19 @@ void NPCManager::CompleteMission(long long playerID, SESSION* session, const Mis
     m_playerMissions[playerID].active = false;
 
     cout << "[NPC] ID=" << playerID << " 미션 완료! missionID=" << mission.missionID << " 보상=" << mission.rewardGold << "G (현재=" << session->_gold << "G)\n";
+}
+
+void NPCManager::SendMissionProgress(SESSION* session, const PlayerMissionState& state, const MissionInfo& mission)
+{
+    if (!session) return;
+
+    sc_packet_mission_progress pkt{};
+    pkt.size = sizeof(pkt);
+    pkt.type = SC_P_MISSION_PROGRESS;
+    pkt.missionID = mission.missionID;
+    pkt.currentCount = state.killCount;
+    pkt.targetCount = mission.targetCount;
+    session->do_send(&pkt);
 }
 
 void NPCManager::SendMissionInfo(SESSION* session, const MissionInfo& mission)

@@ -72,6 +72,8 @@ public:
 	bool				_isDead = false;
 	// Ignore move packets until the client has applied its server-authoritative spawn.
 	bool				_isGameReady = false;
+	bool				_hasLoggedPreReadyMove = false;
+	bool				_hasAcceptedFirstMove = false;
 	float				_respawnTimer = 0.0f;
 	XMFLOAT3			_spawnPos = { 0.0f, 0.0f, 0.0f };
 

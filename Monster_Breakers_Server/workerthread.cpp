@@ -192,7 +192,10 @@ void SESSION::process_packet(unsigned char* p)
 		}
 		_position = _spawnPos;
 		_isGameReady = false;
-
+		_hasLoggedPreReadyMove = false;
+		_hasAcceptedFirstMove = false;
+		cout << "[SPAWN][LOGIN] id=" << _id << " job=" << static_cast<int>(_job)
+			<< " pos=(" << _spawnPos.x << "," << _spawnPos.y << "," << _spawnPos.z << ")\n";
 		// 1. 자신의 정보 전송
 		send_player_info_packet();
 
@@ -276,14 +279,29 @@ void SESSION::process_packet(unsigned char* p)
 
 	case CS_P_MOVE:
 	{
-		if (!_isGameReady) break;
+		if (!_isGameReady)
+		{
+			if (!_hasLoggedPreReadyMove)
+			{
+				auto* dropped = reinterpret_cast<cs_packet_move*>(p);
+				cout << "[SPAWN][DROP-MOVE] id=" << _id << " pos=("
+					<< dropped->position.x << "," << dropped->position.y << "," << dropped->position.z << ")\n";
+				_hasLoggedPreReadyMove = true;
+			}
+			break;
+		}
 
 		cs_packet_move* packet = reinterpret_cast<cs_packet_move*>(p);
 		_position = packet->position;
 		_look = packet->look;
 		_right = packet->right;
 		_animState = packet->animState;  //애니메이션 완료되면 하기
-
+		if (!_hasAcceptedFirstMove)
+		{
+			cout << "[SPAWN][FIRST-MOVE] id=" << _id << " pos=("
+				<< _position.x << "," << _position.y << "," << _position.z << ")\n";
+			_hasAcceptedFirstMove = true;
+		}
 		//cout << "[위치] ID=" << _id<< " pos=(" << _position.x << ", "	<< _position.y << ", "	<< _position.z << ")\n";
 
 		sc_packet_move mp;
@@ -303,8 +321,11 @@ void SESSION::process_packet(unsigned char* p)
 	case CS_P_LOADING_DONE:
 	{
 		cs_packet_loading_done* packet = reinterpret_cast<cs_packet_loading_done*>(p);
+		send_player_info_packet();
 		_isGameReady = true;
 
+		std::cout << "[SPAWN][READY] id=" << _id << " pos=("
+			<< _position.x << "," << _position.y << "," << _position.z << ")\n";
 		std::cout << "[서버] " << _id << "번 클라이언트가 로딩 완료를 알림\n";
 
 		//몬스터 정보 전송 부분 (초기 스폰위치와 상태)

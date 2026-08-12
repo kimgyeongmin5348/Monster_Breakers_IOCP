@@ -42,6 +42,7 @@ private:
     const MissionInfo& PickRandomMission();
     bool IsCoastalMonster(long long monsterID) const;
     void SendMissionInfo(SESSION* session, const MissionInfo& mission);
+    void SendMissionProgress(SESSION* session, const PlayerMissionState& state, const MissionInfo& mission);
     void CompleteMission(long long playerID, SESSION* session, const MissionInfo& mission);
 
 private:
