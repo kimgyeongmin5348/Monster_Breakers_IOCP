@@ -1,5 +1,6 @@
 #include "BossMonster.h"    
 #include "workerthread.h"  
+#include "TerrainHeightMap.h"
 
 namespace
 {
@@ -21,7 +22,8 @@ namespace
 BossMonster::BossMonster(const XMFLOAT3& spawnPos)
 {
     m_position = spawnPos;
-    m_spawnPos = spawnPos;
+    m_position.y = g_terrainHeightMap.GetWorldHeight(m_position.x, m_position.z);
+    m_spawnPos = m_position;
     m_normalAttackUntilSkill = NextSkillThreshold();
 }
 
@@ -162,6 +164,7 @@ void BossMonster::UpdateAI(float dt, const std::unordered_map<long long, SESSION
         const float moveDistance = (std::min)(m_moveSpeed * moveScale * dt, distanceToAttackRange);
         m_position.x += m_look.x * moveDistance;
         m_position.z += m_look.z * moveDistance;
+        m_position.y = g_terrainHeightMap.GetWorldHeight(m_position.x, m_position.z);
         BroadcastBossMove(users, true);   // Walk
         return;
     }

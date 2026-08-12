@@ -48,7 +48,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -127,12 +127,16 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>if not exist &quot;$(OutDir)Terrain&quot; mkdir &quot;$(OutDir)Terrain&quot;&#x0D;&#x0A;copy /Y &quot;$(ProjectDir)Terrain\HeightMap.raw&quot; &quot;$(OutDir)Terrain\HeightMap.raw&quot;</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="BossMonster.cpp" />
     <ClCompile Include="Monster.cpp" />
     <ClCompile Include="NPC.cpp" />
     <ClCompile Include="server_main.cpp" />
+    <ClCompile Include="TerrainHeightMap.cpp" />
     <ClCompile Include="workerthread.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -141,6 +145,7 @@
     <ClInclude Include="Monster.h" />
     <ClInclude Include="NPC.h" />
     <ClInclude Include="protocol.h" />
+    <ClInclude Include="TerrainHeightMap.h" />
     <ClInclude Include="workerthread.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -1,5 +1,6 @@
 #include "Monster.h"
 #include "workerthread.h"
+#include "TerrainHeightMap.h"
 #include "NPC.h"
 
 // ================================================================
@@ -67,6 +68,8 @@ static XMFLOAT3 GetRandomSpawnZone4()
 Monster::Monster(long long id, const XMFLOAT3& spawnPos)
     : m_id(id), m_position(spawnPos), m_spawnPosition(spawnPos)
 {
+    m_position.y = g_terrainHeightMap.GetWorldHeight(m_position.x, m_position.z);
+    m_spawnPosition.y = m_position.y;
     m_look = { 0.0f, 0.0f, 1.0f };
     std::cout << "[몬스터] ID=" << m_id << " 스폰 위치=(" << spawnPos.x << ", " << spawnPos.y << ", " << spawnPos.z << ")\n";
 }
@@ -279,6 +282,7 @@ void Monster::UpdateChase(float dt, const std::unordered_map<long long, SESSION*
     m_look = dir;
     m_position.x += dir.x * m_moveSpeed * dt;
     m_position.z += dir.z * m_moveSpeed * dt;
+    m_position.y = g_terrainHeightMap.GetWorldHeight(m_position.x, m_position.z);
     BroadcastMove(users);
 }
 
@@ -393,6 +397,7 @@ void Monster::UpdateReturn(float dt, const std::unordered_map<long long, SESSION
     m_look = dir;
     m_position.x += dir.x * m_moveSpeed * dt;
     m_position.z += dir.z * m_moveSpeed * dt;
+    m_position.y = g_terrainHeightMap.GetWorldHeight(m_position.x, m_position.z);
     BroadcastMove(users);
 
 }

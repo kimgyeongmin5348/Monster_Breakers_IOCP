@@ -2,6 +2,7 @@
 #include "Monster.h"
 #include "BossMonster.h"
 #include "workerthread.h"
+#include "TerrainHeightMap.h"
 
 //------------------- Check List --------------------- 
 // 
@@ -47,7 +48,12 @@ int main()
 
 	std::cout << "서버 시작" << std::endl;
 	// 몬스터 스폰 (서버 시작 시 1회)
-	MonsterManager::GetInstance().SpawnMonsters(MONSTER_SPAWN_COUNT);
+	    if (!g_terrainHeightMap.Load("Terrain/HeightMap.raw")) {
+        std::cerr << "[ERROR] Terrain/HeightMap.raw load failed." << std::endl;
+        return 1;
+    }
+
+MonsterManager::GetInstance().SpawnMonsters(MONSTER_SPAWN_COUNT);
 	g_boss = SpawnBoss();
 
 	// 몬스터 업데이트 스레드 (별도 스레드로 틱 처리)
