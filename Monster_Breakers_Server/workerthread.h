@@ -70,6 +70,8 @@ public:
 	atomic<bool>		_is_sending{ false };
 
 	bool				_isDead = false;
+	// Ignore move packets until the client has applied its server-authoritative spawn.
+	bool				_isGameReady = false;
 	float				_respawnTimer = 0.0f;
 	XMFLOAT3			_spawnPos = { 0.0f, 0.0f, 0.0f };
 

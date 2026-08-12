@@ -191,6 +191,7 @@ void SESSION::process_packet(unsigned char* p)
 		default:          _spawnPos = { 0.0f, 0.0f,  0.0f }; break;
 		}
 		_position = _spawnPos;
+		_isGameReady = false;
 
 		// 1. 자신의 정보 전송
 		send_player_info_packet();
@@ -275,6 +276,8 @@ void SESSION::process_packet(unsigned char* p)
 
 	case CS_P_MOVE:
 	{
+		if (!_isGameReady) break;
+
 		cs_packet_move* packet = reinterpret_cast<cs_packet_move*>(p);
 		_position = packet->position;
 		_look = packet->look;
@@ -300,6 +303,7 @@ void SESSION::process_packet(unsigned char* p)
 	case CS_P_LOADING_DONE:
 	{
 		cs_packet_loading_done* packet = reinterpret_cast<cs_packet_loading_done*>(p);
+		_isGameReady = true;
 
 		std::cout << "[서버] " << _id << "번 클라이언트가 로딩 완료를 알림\n";
 
