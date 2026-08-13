@@ -2,6 +2,7 @@
 #include "Monster.h"
 #include "NPC.h"
 #include "protocol.h"
+#include "TerrainHeightMap.h"
 
 class SESSION;
 class Monster;
@@ -184,12 +185,8 @@ void SESSION::process_packet(unsigned char* p)
 
 		cout << "[서버] " << _id << "번 클라이언트 로그인: " << _playerID << "(직업 :" << GetJobName(_job) << ")" << endl;
 
-		switch (_job) {
-		case JOB_WARRIOR: _spawnPos = { -7.5f, 3.0f,  34.2f }; break;
-		case JOB_MAGE:    _spawnPos = { -9.6f, 3.0f,  31.9f }; break;
-		case JOB_THIEF:   _spawnPos = { -10.5f, 3.0f,  37.2f }; break;
-		default:          _spawnPos = { 0.0f, 0.0f,  0.0f }; break;
-		}
+		// All jobs share one fixed lobby spawn. The same _spawnPos is reused by Respawn().
+		_spawnPos = { -13.9f, 0.5f, 35.2f };
 		_position = _spawnPos;
 		_isGameReady = false;
 		_hasLoggedPreReadyMove = false;

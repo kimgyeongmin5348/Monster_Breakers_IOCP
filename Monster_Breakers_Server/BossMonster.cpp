@@ -352,8 +352,8 @@ void BossMonster::BroadcastBossDeath(long long killerID, const std::unordered_ma
     pkt.bossID = m_id;
     pkt.killerID = killerID;
 
-    for (auto& [id, session] : users)
-        session->do_send(&pkt);
+    BroadcastToAll(&pkt, -1);
+    cout << "[Boss] SC_P_BOSS_DEATH broadcast killer=" << killerID << "\n";
 }
 
 void BossMonster::BroadcastBossMove(const std::unordered_map<long long, SESSION*>& users, bool isMoving)
