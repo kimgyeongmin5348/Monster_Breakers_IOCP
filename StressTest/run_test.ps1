@@ -1,6 +1,7 @@
 ﻿param(
     [int]$Clients = 100,
     [int]$Ramp = 10,
+    [int]$Warmup = 30,
     [int]$Duration = 60,
     [int]$MoveHz = 2,
     [int]$PingHz = 1,
@@ -21,7 +22,7 @@ if (-not (Test-Path -LiteralPath $exe)) {
 }
 
 $serverProcess = Get-Process -Name "Monster_Breakers_Server" -ErrorAction SilentlyContinue | Select-Object -First 1
-$arguments = @("--host", $HostAddress, "--port", $Port, "--clients", $Clients, "--ramp", $Ramp,
+$arguments = @("--host", $HostAddress, "--port", $Port, "--clients", $Clients, "--ramp", $Ramp, "--warmup", $Warmup,
     "--duration", $Duration, "--move-hz", $MoveHz, "--ping-hz", $PingHz, "--csv", $csv)
 if ($serverProcess) {
     $arguments += @("--server-pid", $serverProcess.Id)

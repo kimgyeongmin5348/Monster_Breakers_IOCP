@@ -12,7 +12,7 @@ Visual Studio에서 `StressTest.sln`을 열어 `Release | x64`로 빌드합니�
 2. StressTest 폴더에서 아래 명령을 실행합니다.
 
 ```powershell
-.\run_test.ps1 -Clients 100 -Ramp 10 -Duration 60 -MoveHz 2 -PingHz 1 -OpenReport
+.\run_test.ps1 -Clients 100 -Ramp 10 -Warmup 30 -Duration 60 -MoveHz 2 -PingHz 1 -OpenReport
 ```
 
 테스트가 끝나면 다음 결과물이 자동 생성됩니다.
@@ -21,6 +21,10 @@ Visual Studio에서 `StressTest.sln`을 열어 `Release | x64`로 빌드합니�
 - `Results/stress_report.html`: 포트폴리오 캡처용 대시보드
 
 HTML 대시보드는 외부 라이브러리나 인터넷 연결 없이 동작하며 최대 동시 접속, 접속 성공률, 평균 패킷 처리량, 누적 트래픽, 오류 수와 시간별 그래프를 한 화면에 표시합니다.
+
+가상 클라이언트는 로그인 직후 실제 클라이언트와 동일하게 `CS_P_LOADING_DONE`을 전송하므로 이동 패킷이 서버 게임 로직에서 실제 처리됩니다. `Warmup` 시간 동안에도 같은 이동 부하를 발생시키지만 해당 구간의 RTT는 최종 통계에서 제외합니다. 워밍업 중 발생한 접속 종료와 오류는 제외하지 않습니다.
+
+서버는 처리한 이동 패킷을 송신자를 제외한 전체 접속자에게 전파합니다. 스트레스 클라이언트의 패킷 발생 시점은 실제 사용자처럼 측정 구간 전체에 균등하게 분산하지만, 전체 패킷 발생량과 동기화 대상 수는 줄이지 않습니다.
 
 보고서에는 실제 Ping/Pong 왕복시간의 평균·P50·P95·P99, Ping 응답률, 서버 프로세스 CPU·메모리, 테스트 조건과 원본 CSV의 SHA-256도 포함됩니다. 로컬 서버 프로세스는 `run_test.ps1`이 자동으로 찾아 측정합니다.
 
@@ -51,11 +55,11 @@ HTML 대시보드는 외부 라이브러리나 인터넷 연결 없이 동작하
 단일 실행의 우연한 결과를 피하려면 같은 조건으로 3회 반복하고 비교 보고서를 사용하세요.
 
 ```powershell
-.\run_benchmark.ps1 -Clients 500 -Ramp 30 -Duration 600 -MoveHz 2 -PingHz 1 -Runs 3 -OpenReport
+.\run_benchmark.ps1 -Clients 500 -Ramp 30 -Warmup 30 -Duration 600 -MoveHz 2 -PingHz 1 -Runs 3 -OpenReport
 ```
 
 각 실행의 상세 보고서와 `Results/benchmark_comparison.html`이 생성됩니다. 비교 보고서는 실행별 접속률, Ping 응답률, RTT, CPU, 메모리, 오류와 각 원본 CSV 해시를 함께 표시합니다.
 
-기본 PASS 기준은 접속 성공률 99% 이상, Ping 응답률 99% 이상, P95 RTT 100ms 이하, 비정상 종료 및 잘못된 패킷 0건입니다. 포트폴리오에는 테스트 PC 사양, 서버와 부하 발생기의 실행 위치, Release x64 빌드 사용 여부를 함께 기재하세요.
+기본 PASS 기준은 접속 성공률 99% 이상, Ping 응답률 99% 이상, P95 RTT 100ms 이하, P99 RTT 200ms 이하, 비정상 종료 및 잘못된 패킷 0건입니다. 포트폴리오에는 테스트 PC 사양, 서버와 부하 발생기의 실행 위치, Release x64 빌드 사용 여부를 함께 기재하세요.
 
 테스트는 본인이 관리하거나 허가받은 서버에서만 실행하세요.

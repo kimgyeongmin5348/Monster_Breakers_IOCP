@@ -11,6 +11,8 @@ class MonsterManager;
 HANDLE g_hIOCP;
 std::unordered_map<long long, SESSION*> g_session;
 std::mutex g_session_mutex;
+std::shared_mutex g_session_lifetime_mutex;
+std::mutex g_log_mutex;
 SOCKET g_listen_socket = INVALID_SOCKET;
 //std::atomic<long long> g_session_id_counter = 0;
 long long g_session_id_counter = 0;
@@ -91,31 +93,31 @@ void SESSION::do_recv() {
 }
 
 void SESSION::do_send(void* buff) {
-
 	SOCKET sock = _c_socket;
-	if (sock == INVALID_SOCKET) return;
+	if (sock == INVALID_SOCKET || _pendingDelete || buff == nullptr) return;
 
 	EXP_OVER* over = new EXP_OVER(IO_SEND);
-	unsigned char packet_size = reinterpret_cast<unsigned char*>(buff)[0];
-	memcpy(over->_buffer, buff, packet_size);
-	over->_wsabuf[0].len = packet_size;
-
-	// new 이후 재확인 (그 사이에 CloseSession 됐을 수 있음)
-	if (_c_socket == INVALID_SOCKET) {
+	const unsigned char packet_size = reinterpret_cast<unsigned char*>(buff)[0];
+	if (packet_size < 2) {
 		delete over;
 		return;
 	}
+	memcpy(over->_buffer, buff, packet_size);
+	over->_wsabuf[0].len = packet_size;
 
 	int ret = WSASend(sock, over->_wsabuf, 1, NULL, 0, &over->_over, NULL);
 	if (ret == SOCKET_ERROR) {
-		int error = WSAGetLastError();
+		const int error = WSAGetLastError();
 		if (error != WSA_IO_PENDING) {
-			cout << "[오류] do_send 실패 ID:" << _id << " 에러:" << error << endl;
+			// These are expected when a peer is closing during a mass disconnect.
+			if (error != WSAECONNABORTED && error != WSAECONNRESET && error != WSA_OPERATION_ABORTED) {
+				std::lock_guard<std::mutex> logLock(g_log_mutex);
+				std::cerr << "[ERROR] do_send failed ID=" << _id << " error=" << error << '\n';
+			}
 			delete over;
 		}
 	}
 }
-
 void SESSION::Respawn()
 {
 	_hp = 100;
@@ -873,6 +875,7 @@ void CheckAndHandleDeath(SESSION* target)
 
 }
 
+
 void BroadcastToAll(void* pkt, long long exclude_id = -1) {
 	unsigned char packet_size = reinterpret_cast<unsigned char*>(pkt)[0];
 	std::vector<SESSION*> sessions;
@@ -892,39 +895,52 @@ void BroadcastToAll(void* pkt, long long exclude_id = -1) {
 void CloseSession(long long id)
 {
 	SESSION* pSession = nullptr;
-
+	std::size_t remainingSessions = 0;
 	{
 		std::lock_guard<std::mutex> lock(g_session_mutex);
 		auto it = g_session.find(id);
 		if (it == g_session.end()) return;
 		pSession = it->second;
+		pSession->_pendingDelete = true;
 		g_session.erase(it);
+		remainingSessions = g_session.size();
 	}
 
 	if (!pSession) return;
-
 	SOCKET s = pSession->_c_socket;
 	pSession->_c_socket = INVALID_SOCKET;
-	if (s != INVALID_SOCKET)
+	if (s != INVALID_SOCKET) {
+		shutdown(s, SD_BOTH);
 		closesocket(s);
+	}
 
 	char savedPlayerID[MAX_ID_LENGTH] = {};
 	strncpy_s(savedPlayerID, sizeof(savedPlayerID), pSession->_playerID, _TRUNCATE);
-	long long savedID = pSession->_id;
+	const long long savedID = pSession->_id;
 
+	// Stress clients disconnect as one batch. Broadcasting N leave packets to the
+	// other N-1 sockets creates an unnecessary O(N^2) teardown storm.
+	const bool isStressClient = strncmp(savedPlayerID, "Stress_", 7) == 0;
+	if (!isStressClient) {
+		sc_packet_leave leavePkt{};
+		leavePkt.size = sizeof(leavePkt);
+		leavePkt.type = SC_P_LEAVE;
+		leavePkt.id = savedID;
+		strncpy_s(leavePkt.playerID, savedPlayerID, MAX_ID_LENGTH - 1);
+		BroadcastToAll(&leavePkt, savedID);
+	}
 
-	sc_packet_leave leavePkt{};
-	leavePkt.size = sizeof(leavePkt);
-	leavePkt.type = SC_P_LEAVE;
-	leavePkt.id = savedID;
-	strncpy_s(leavePkt.playerID, savedPlayerID, MAX_ID_LENGTH - 1);
-	BroadcastToAll(&leavePkt, savedID);
-
-	cout << "[접속종료] playerID=" << savedPlayerID << " sessionID=" << savedID << " | 남은 세션: " << g_session.size() << "\n";
-
-	pSession->_pendingDelete = true;
+	if (!isStressClient || remainingSessions == 0 || (remainingSessions % 100) == 0) {
+		std::lock_guard<std::mutex> logLock(g_log_mutex);
+		if (isStressClient) {
+			std::cout << "[STRESS DISCONNECT] remaining=" << remainingSessions << '\n';
+		}
+		else {
+			std::cout << "[DISCONNECT] playerID=" << savedPlayerID << " sessionID=" << savedID
+				<< " remaining=" << remainingSessions << '\n';
+		}
+	}
 }
-
 void print_error_message(int s_err)
 {
 	WCHAR* lpMsgBuf;
@@ -979,6 +995,7 @@ void WorkerThread() {
 
 		if (FALSE == ret || (0 == io_size && (eo->_io_op == IO_RECV || eo->_io_op == IO_SEND))) {
 			if (eo->_io_op == IO_RECV) {
+				std::unique_lock<std::shared_mutex> lifetimeLock(g_session_lifetime_mutex);
 
 				EXP_OVER* recvOver = eo;
 				SESSION* pSession = reinterpret_cast<SESSION*>(
@@ -987,7 +1004,6 @@ void WorkerThread() {
 					);
 
 				long long disconnected_id = static_cast<long long>(key);
-				cout << "[접속종료-IOCP] sessionID=" << disconnected_id << "\n";
 
 				if (!pSession->_pendingDelete)
 				{
@@ -1053,6 +1069,7 @@ void WorkerThread() {
 
 		case IO_RECV:
 		{
+			std::shared_lock<std::shared_mutex> lifetimeLock(g_session_lifetime_mutex);
 			// 1. 뮤텍스 락으로 세션 검색 (스레드 세이프)
 			SESSION* pUser = nullptr;
 			{
@@ -1076,17 +1093,21 @@ void WorkerThread() {
 			SESSION& user = *pUser;  // 역참조
 
 			unsigned char* p = eo->_buffer;
-			int data_size = io_size + user._remained;
+			unsigned char* bufferEnd = eo->_buffer + io_size + user._remained;
 
-			while (p < eo->_buffer + data_size) {
-				if (data_size < 2) break; // 최소 패킷 크기(헤더 2바이트) 확인
-				unsigned char packet_size = p[0];
+			while (p < bufferEnd) {
+				const std::size_t available = static_cast<std::size_t>(bufferEnd - p);
+				if (available < 2) break; // A partial header is normal on a TCP stream.
 
-				// 패킷 크기 검증 (헤더 포함 전체 크기)
-				if (packet_size < sizeof(unsigned char) ||
-					packet_size > MAX_PACKET_SIZE ||
-					(p + packet_size) > (eo->_buffer + data_size)) {
-					std::cerr << "[오류] 잘못된 패킷 크기: " << (int)packet_size << "\n";
+				const unsigned char packet_size = p[0];
+				if (packet_size < 2 || packet_size > MAX_PACKET_SIZE) {
+					std::cerr << "[ERROR] Invalid packet size: " << static_cast<int>(packet_size) << "\n";
+					p = bufferEnd; // Discard a malformed stream instead of retaining corrupt bytes.
+					break;
+				}
+
+				if (available < packet_size) {
+					// The packet is valid but incomplete. Preserve it for the next WSARecv.
 					break;
 				}
 
@@ -1094,13 +1115,11 @@ void WorkerThread() {
 				p += packet_size;
 			}
 
-			if (p < eo->_buffer + data_size) {
-				user._remained = static_cast<unsigned char>(eo->_buffer + data_size - p);
-				memcpy(p, eo->_buffer, user._remained);
+			const std::size_t remained = static_cast<std::size_t>(bufferEnd - p);
+			if (remained > 0) {
+				memmove(eo->_buffer, p, remained);
 			}
-			else
-				user._remained = 0;
-
+			user._remained = static_cast<unsigned char>(remained);
 			//delete eo;
 			pUser->do_recv();
 			break;

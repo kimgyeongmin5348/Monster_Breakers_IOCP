@@ -64,6 +64,7 @@ MonsterManager::GetInstance().SpawnMonsters(MONSTER_SPAWN_COUNT);
 		while (true)
 		{
 			auto start = clock::now();
+			std::shared_lock<std::shared_mutex> lifetimeLock(g_session_lifetime_mutex);
 
 			std::unordered_map<long long, SESSION*> userSnapshot;
 			{
@@ -100,6 +101,8 @@ MonsterManager::GetInstance().SpawnMonsters(MONSTER_SPAWN_COUNT);
 			}
 
 			// 남은 틱 시간만큼 sleep
+			lifetimeLock.unlock();
+
 			auto elapsed = std::chrono::duration<float>(clock::now() - start).count();
 			float sleepTime = TICK_RATE - elapsed;
 			if (sleepTime > 0.0f)

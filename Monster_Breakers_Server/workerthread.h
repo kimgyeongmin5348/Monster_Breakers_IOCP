@@ -10,6 +10,8 @@ extern HANDLE g_hIOCP;
 extern std::atomic<long long> g_client_counter;
 extern std::unordered_map<long long, SESSION*> g_session;
 extern std::mutex g_session_mutex;
+extern std::shared_mutex g_session_lifetime_mutex;
+extern std::mutex g_log_mutex;
 extern SOCKET g_listen_socket;
 extern BossMonster* g_boss;
 
@@ -33,7 +35,7 @@ public:
 	WSAOVERLAPPED		_over;
 	IO_OP				_io_op;
 	SOCKET				_accept_socket;
-	unsigned char		_buffer[1024];
+	unsigned char		_buffer[256];
 	WSABUF				_wsabuf[1];
 
 };

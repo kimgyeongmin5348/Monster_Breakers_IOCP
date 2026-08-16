@@ -5,6 +5,7 @@
     [double]$MinConnectionRate = 99.0,
     [double]$MinPingResponseRate = 99.0,
     [double]$MaxP95Ms = 100.0,
+    [double]$MaxP99Ms = 200.0,
     [string]$CpuSpec = "Intel(R) Core(TM) i5-10400F CPU @ 2.90GHz (2.90 GHz)",
     [string]$RamSpec = "32.0 GB",
     [string]$GpuSpec = "NVIDIA GeForce RTX 3060 (8 GB)"
@@ -52,6 +53,7 @@ $data = foreach ($row in $rows) {
         target = [int64]$row.target_clients
         moveHz = [int]$row.move_hz
         pingHz = [int]$row.ping_hz
+        warmup = [int]$row.warmup_sec
         serverPid = [int64]$row.server_pid
     }
 }
@@ -98,7 +100,7 @@ $html = @"
     <article class="chart"><h2>응답 지연시간</h2><p>Ping/Pong 왕복시간의 누적 백분위</p><canvas id="latency"></canvas></article>
     <article class="chart"><h2>서버 자원 사용량</h2><p>서버 프로세스 CPU와 메모리</p><canvas id="resources"></canvas></article>
   </section>
-  <section class="evidence"><div><h2>측정 근거</h2><div class="facts"><div class="fact">목표 클라이언트 <b id="target"></b></div><div class="fact">측정 시간 <b id="testTime"></b></div><div class="fact">클라이언트당 이동 <b id="moveRate"></b></div><div class="fact">RTT 측정 빈도 <b id="pingRate"></b></div><div class="fact">Ping 응답률 <b id="pingSuccess"></b></div><div class="fact">서버 PID <b id="pid"></b></div></div><h2 style="margin-top:18px">테스트 PC 사양</h2><div class="criteria">PC: $machineName<br>CPU: $safeCpuSpec<br>RAM: $safeRamSpec<br>GPU: $safeGpuSpec</div><div class="label" style="margin-top:14px">원본 CSV SHA-256</div><div class="hash">$csvHash</div></div><div><h2>사전 공개 합격 기준</h2><div class="criteria">① 접속 성공률 ≥ $MinConnectionRate%<br>② Ping 응답률 ≥ $MinPingResponseRate%<br>③ P95 RTT ≤ $MaxP95Ms ms<br>④ 비정상 연결 종료 = 0건<br>⑤ 잘못된 패킷 = 0건</div></div></section>
+  <section class="evidence"><div><h2>측정 근거</h2><div class="facts"><div class="fact">목표 클라이언트 <b id="target"></b></div><div class="fact">워밍업/측정 <b id="testTime"></b></div><div class="fact">클라이언트당 이동 <b id="moveRate"></b></div><div class="fact">이동 전파 <b>전체 접속자</b></div><div class="fact">RTT 측정 빈도 <b id="pingRate"></b></div><div class="fact">Ping 응답률 <b id="pingSuccess"></b></div><div class="fact">서버 PID <b id="pid"></b></div></div><h2 style="margin-top:18px">테스트 PC 사양</h2><div class="criteria">PC: $machineName<br>CPU: $safeCpuSpec<br>RAM: $safeRamSpec<br>GPU: $safeGpuSpec</div><div class="label" style="margin-top:14px">원본 CSV SHA-256</div><div class="hash">$csvHash</div></div><div><h2>사전 공개 합격 기준</h2><div class="criteria">① 접속 성공률 ≥ $MinConnectionRate%<br>② Ping 응답률 ≥ $MinPingResponseRate%<br>③ P95 RTT ≤ $MaxP95Ms ms<br>④ P99 RTT ≤ $MaxP99Ms ms<br>⑤ 비정상 연결 종료 = 0건<br>⑥ 잘못된 패킷 = 0건</div></div></section>
   <footer class="footer"><span>Monster Breakers · C++ IOCP Server</span><span id="duration"></span></footer>
 </main>
 <script>
@@ -119,13 +121,13 @@ document.querySelector('#p95').innerHTML=last.rttP95.toFixed(2)+'<span class="un
 document.querySelector('#p99').innerHTML=last.rttP99.toFixed(2)+'<span class="unit">ms</span>';
 document.querySelector('#errors').innerHTML=fmt(totalErrors)+'<span class="unit">건</span>';
 document.querySelector('#target').textContent=fmt(last.target)+'명';
-document.querySelector('#testTime').textContent=fmt(last.elapsed)+'초';
+document.querySelector('#testTime').textContent=fmt(last.warmup)+'초 / '+fmt(last.elapsed)+'초';
 document.querySelector('#moveRate').textContent=last.moveHz+' pkt/s';
 document.querySelector('#pingRate').textContent=last.pingHz+'회/s';
 document.querySelector('#pingSuccess').textContent=pingSuccess.toFixed(2)+'%';
 document.querySelector('#pid').textContent=last.serverPid||'원격/미측정';
 document.querySelector('#duration').textContent='측정 시간 '+fmt(last.elapsed)+'초 · 총 수신 '+fmt(last.received)+' packets';
-const passed=success>=$MinConnectionRate&&pingSuccess>=$MinPingResponseRate&&last.rttP95<=$MaxP95Ms&&last.disconnected===0&&last.invalid===0;
+const passed=success>=$MinConnectionRate&&pingSuccess>=$MinPingResponseRate&&last.rttP95<=$MaxP95Ms&&last.rttP99<=$MaxP99Ms&&last.disconnected===0&&last.invalid===0;
 const status=document.querySelector('#status');status.querySelector('span:last-child').textContent=passed?'PASS':'FAIL';if(!passed)status.classList.add('fail');
 
 function seriesDelta(key){return data.map((x,i)=>i===0?0:Math.max(0,x[key]-data[i-1][key])/Math.max(1,x.elapsed-data[i-1].elapsed));}

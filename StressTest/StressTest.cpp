@@ -34,6 +34,7 @@ constexpr char CS_P_STRESS_PING = 90;
 constexpr char SC_P_STRESS_PONG = 91;
 constexpr int MAX_ID_LENGTH = 20;
 constexpr std::size_t RECV_BUFFER_SIZE = 8192;
+constexpr std::uint64_t MEASURED_PING_BIT = (1ull << 63);
 
 #pragma pack(push, 1)
 struct Float3 { float x, y, z; };
@@ -82,7 +83,7 @@ static_assert(sizeof(StressPingPacket) == 18);
 struct Config {
     std::string host = "127.0.0.1";
     std::uint16_t port = 3000;
-    int clients = 10000;
+    int clients = 1000;
     int durationSeconds = 60;
     int rampSeconds = 10;
     int warmupSeconds = 30;
@@ -303,7 +304,7 @@ void CountPackets(Client& client, const char* data, DWORD length) {
             const auto nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()).count();
             const double latency = (nowNs - pong.clientTimestampNs) / 1000000.0;
-            if (latency >= 0.0 && latency < 60000.0) {
+            if ((pong.sequence & MEASURED_PING_BIT) != 0 && latency >= 0.0 && latency < 60000.0) {
                 std::lock_guard<std::mutex> lock(g_metrics.latencyMutex);
                 g_metrics.latencyMs.push_back(latency);
                 g_metrics.pongsReceived.fetch_add(1, std::memory_order_relaxed);
@@ -409,10 +410,10 @@ void SendMovement(Client& client, double elapsedSeconds) {
     }
 }
 
-void SendPing(Client& client, std::uint64_t sequence) {
+void SendPing(Client& client, std::uint64_t sequence, bool measured) {
     if (!client.alive.load(std::memory_order_relaxed)) return;
     StressPingPacket packet;
-    packet.sequence = sequence;
+    packet.sequence = measured ? (sequence | MEASURED_PING_BIT) : sequence;
     packet.clientTimestampNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
     const int result = send(client.socket, reinterpret_cast<const char*>(&packet), sizeof(packet), 0);
@@ -424,6 +425,17 @@ void SendPing(Client& client, std::uint64_t sequence) {
         g_metrics.sendErrors.fetch_add(1, std::memory_order_relaxed);
         if (result == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK) MarkDisconnected(client);
     }
+}
+
+void ResetMeasurementTraffic() {
+    g_metrics.packetsSent.store(0, std::memory_order_relaxed);
+    g_metrics.packetsReceived.store(0, std::memory_order_relaxed);
+    g_metrics.bytesSent.store(0, std::memory_order_relaxed);
+    g_metrics.bytesReceived.store(0, std::memory_order_relaxed);
+    g_metrics.pingsSent.store(0, std::memory_order_relaxed);
+    g_metrics.pongsReceived.store(0, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(g_metrics.latencyMutex);
+    g_metrics.latencyMs.clear();
 }
 
 LatencySummary GetLatencySummary() {
@@ -453,7 +465,7 @@ void WriteCsvHeader(std::ofstream& csv) {
     csv << "elapsed_sec,active_clients,connected_total,connect_failed,disconnected,"
            "packets_sent,packets_received,bytes_sent,bytes_received,send_errors,invalid_packets,"
            "pings_sent,pongs_received,rtt_avg_ms,rtt_p50_ms,rtt_p95_ms,rtt_p99_ms,rtt_max_ms,"
-           "server_cpu_percent,server_memory_mb,target_clients,move_hz,ping_hz,server_pid\n";
+           "server_cpu_percent,server_memory_mb,target_clients,move_hz,ping_hz,warmup_sec,server_pid\n";
 }
 
 void WriteCsvRow(std::ofstream& csv, int elapsed, const ServerResourceSample& resources) {
@@ -469,7 +481,8 @@ void WriteCsvRow(std::ofstream& csv, int elapsed, const ServerResourceSample& re
         << std::fixed << std::setprecision(3) << latency.average << ',' << latency.p50 << ','
         << latency.p95 << ',' << latency.p99 << ',' << latency.maximum << ','
         << resources.cpuPercent << ',' << resources.memoryMb << ','
-        << g_config.clients << ',' << g_config.moveHz << ',' << g_config.pingHz << ',' << g_config.serverPid << '\n';
+        << g_config.clients << ',' << g_config.moveHz << ',' << g_config.pingHz << ','
+        << g_config.warmupSeconds << ',' << g_config.serverPid << '\n';
     csv.flush();
 }
 
@@ -546,27 +559,71 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Real clients do not send their updates on the exact same microsecond. Spread the
+    // same total packet rate evenly across the interval to avoid an artificial burst.
+    const auto moveDispatchInterval = g_config.moveHz > 0
+        ? std::chrono::duration<double>(1.0 / (static_cast<double>(g_config.clients) * g_config.moveHz))
+        : std::chrono::duration<double>(3600.0);
+    const auto pingDispatchInterval = g_config.pingHz > 0
+        ? std::chrono::duration<double>(1.0 / (static_cast<double>(g_config.clients) * g_config.pingHz))
+        : std::chrono::duration<double>(3600.0);
+    std::uint64_t pingSequence = 0;
+
+    if (g_config.warmupSeconds > 0) {
+        const auto warmupStart = std::chrono::steady_clock::now();
+        const auto warmupFinish = warmupStart + std::chrono::seconds(g_config.warmupSeconds);
+        auto warmupMove = warmupStart;
+        auto warmupPing = warmupStart;
+        auto warmupReport = warmupStart;
+        std::size_t warmupMoveClient = 0;
+        std::size_t warmupPingClient = 0;
+        std::cout << "Warm-up started: " << g_config.warmupSeconds
+                  << "s of active movement load (excluded from RTT statistics).\n";
+        while (std::chrono::steady_clock::now() < warmupFinish) {
+            const auto now = std::chrono::steady_clock::now();
+            while (g_config.moveHz > 0 && now >= warmupMove) {
+                const double elapsed = std::chrono::duration<double>(now - warmupStart).count();
+                SendMovement(*g_clients[warmupMoveClient], elapsed);
+                warmupMoveClient = (warmupMoveClient + 1) % g_clients.size();
+                warmupMove += std::chrono::duration_cast<std::chrono::steady_clock::duration>(moveDispatchInterval);
+            }
+            while (g_config.pingHz > 0 && now >= warmupPing) {
+                SendPing(*g_clients[warmupPingClient], ++pingSequence, false);
+                warmupPingClient = (warmupPingClient + 1) % g_clients.size();
+                warmupPing += std::chrono::duration_cast<std::chrono::steady_clock::duration>(pingDispatchInterval);
+            }
+            if (now >= warmupReport) {
+                const int elapsed = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(now - warmupStart).count());
+                std::cout << "[warm-up " << elapsed << "s] active="
+                          << (g_metrics.connected.load() - g_metrics.disconnected.load()) << '\n';
+                serverMonitor.Sample();
+                warmupReport = now + std::chrono::seconds(5);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        ResetMeasurementTraffic();
+        std::cout << "Warm-up complete. Measurement counters reset.\n";
+    }
+
     const auto loadStart = std::chrono::steady_clock::now();
     auto nextMove = loadStart;
     auto nextPing = loadStart;
     auto nextReport = loadStart;
+    std::size_t nextMoveClient = 0;
+    std::size_t nextPingClient = 0;
     const auto finish = loadStart + std::chrono::seconds(g_config.durationSeconds);
-    const auto moveInterval = g_config.moveHz > 0
-        ? std::chrono::duration<double>(1.0 / g_config.moveHz) : std::chrono::duration<double>(3600.0);
-    const auto pingInterval = g_config.pingHz > 0
-        ? std::chrono::duration<double>(1.0 / g_config.pingHz) : std::chrono::duration<double>(3600.0);
-    std::uint64_t pingSequence = 0;
-
     while (std::chrono::steady_clock::now() < finish) {
         const auto now = std::chrono::steady_clock::now();
-        if (g_config.moveHz > 0 && now >= nextMove) {
+        while (g_config.moveHz > 0 && now >= nextMove) {
             const double elapsed = std::chrono::duration<double>(now - loadStart).count();
-            for (auto& client : g_clients) SendMovement(*client, elapsed);
-            nextMove = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(moveInterval);
+            SendMovement(*g_clients[nextMoveClient], elapsed);
+            nextMoveClient = (nextMoveClient + 1) % g_clients.size();
+            nextMove += std::chrono::duration_cast<std::chrono::steady_clock::duration>(moveDispatchInterval);
         }
-        if (g_config.pingHz > 0 && now >= nextPing) {
-            for (auto& client : g_clients) SendPing(*client, ++pingSequence);
-            nextPing = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(pingInterval);
+        while (g_config.pingHz > 0 && now >= nextPing) {
+            SendPing(*g_clients[nextPingClient], ++pingSequence, true);
+            nextPingClient = (nextPingClient + 1) % g_clients.size();
+            nextPing += std::chrono::duration_cast<std::chrono::steady_clock::duration>(pingDispatchInterval);
         }
         if (now >= nextReport) {
             const int elapsed = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(now - loadStart).count());
