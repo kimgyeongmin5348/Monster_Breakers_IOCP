@@ -27,7 +27,7 @@ class BossMonster {
 public:
     // ±âº»
     static constexpr long long  BOSS_ID = 99999;
-    static constexpr int        BOSS_MAX_HP = 100;
+    static constexpr int        BOSS_MAX_HP = 500;
     static constexpr int        BOSS_ATTACK = 40;
     static constexpr int        BOSS_SKILL_BONUS = 20;
 

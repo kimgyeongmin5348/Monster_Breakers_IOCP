@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 //#define SET_DATA_FROM_DATABASE
 #define SERVER_STRESS_TEST
@@ -75,6 +75,10 @@ constexpr char SC_P_NPC_MISSION = 76;
 constexpr char SC_P_MISSION_COMPLETE = 77;
 constexpr char SC_P_MISSION_PROGRESS = 78;
 
+// Stress-test-only RTT probe. The server echoes the sequence and client timestamp.
+constexpr char CS_P_STRESS_PING = 90;
+constexpr char SC_P_STRESS_PONG = 91;
+
 // =================== 주의!! ========================
 // 
 // 1. 애니메이션 동기화는 클라에서 애니메이션 완료하면 하기
@@ -83,6 +87,20 @@ constexpr char SC_P_MISSION_PROGRESS = 78;
 // ===================================================
 
 #pragma pack (push, 1)
+struct cs_packet_stress_ping
+{
+	unsigned char size;
+	char type;
+	std::uint64_t sequence;
+	std::int64_t clientTimestampNs;
+};
+struct sc_packet_stress_pong
+{
+	unsigned char size;
+	char type;
+	std::uint64_t sequence;
+	std::int64_t clientTimestampNs;
+};
 
 struct cs_packet_loading_done
 {

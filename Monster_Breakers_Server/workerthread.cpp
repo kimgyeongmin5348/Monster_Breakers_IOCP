@@ -160,6 +160,17 @@ void SESSION::process_packet(unsigned char* p)
 {
 	const unsigned char packet_type = p[1];
 	switch (packet_type) {
+	case CS_P_STRESS_PING:
+	{
+		const auto* ping = reinterpret_cast<const cs_packet_stress_ping*>(p);
+		sc_packet_stress_pong pong{};
+		pong.size = sizeof(pong);
+		pong.type = SC_P_STRESS_PONG;
+		pong.sequence = ping->sequence;
+		pong.clientTimestampNs = ping->clientTimestampNs;
+		do_send(&pong);
+		break;
+	}
 	case CS_P_LOGIN:
 	{
 		cs_packet_login* packet = reinterpret_cast<cs_packet_login*>(p);

@@ -63,7 +63,7 @@ public:
 	XMFLOAT3			_look;
 	XMFLOAT3			_right;
 	uint8_t				_animState;
-	short				_hp = 100;
+	short				_hp = 1000;
 	int					_gold = 1000;		// 초기 골드 설정
 	string				_name;
 	uint8_t				_job;

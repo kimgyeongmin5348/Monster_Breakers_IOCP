@@ -1,0 +1,10 @@
+x64/
+Debug/
+Release/
+Results/*.csv
+Results/*.html
+Results/*.log
+Results/*.png
+!Results/sample_report.png
+!Results/sample_result.csv
+!Results/sample_report.html
